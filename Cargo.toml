@@ -11,8 +11,8 @@
 [package]
 name = "sonar"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.75"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Sonar Contributors"]
 description = "Sonar - the world's strongest battleship AI engine (pure Rust, Apache-2.0)"
 license = "Apache-2.0"

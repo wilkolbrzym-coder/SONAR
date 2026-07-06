@@ -1,0 +1,58 @@
+# Sonar - the world's strongest battleship AI engine.
+#
+# Pure Rust. Apache 2.0. Time-limited hypothesis search with
+# PDF density + Bayesian fleet inference + constraint propagation.
+#
+# Author: Sonar Contributors
+# License: Apache-2.0
+#
+# Version: 0.1.0 (experimental — may contain bugs)
+
+[package]
+name = "sonar"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Sonar Contributors"]
+description = "Sonar - the world's strongest battleship AI engine (pure Rust, Apache-2.0)"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/your-org/sonar"
+keywords = ["battleship", "ai", "game-engine", "pdf", "bayesian"]
+categories = ["games", "algorithms"]
+build = "build.rs"
+
+[lib]
+name = "sonar"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sonar"
+path = "src/bin/sonar.rs"
+
+[[bench]]
+name = "core_bench"
+harness = false
+path = "benches/core_bench.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+criterion = "0.5"
+
+# Maximum optimization profile for Linux x86_64.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+overflow-checks = false
+incremental = false
+
+[profile.bench]
+inherits = "release"
+debug = true

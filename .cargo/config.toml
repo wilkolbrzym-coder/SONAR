@@ -1,0 +1,16 @@
+# Cargo build flags — maximum optimization for Linux x86_64.
+# CPU features used: bmi1, bmi2, avx2, avx512f, popcnt, sse4.2
+
+[build]
+rustflags = [
+    "-C", "target-cpu=native",
+    "-C", "target-feature=+bmi1,+bmi2,+avx2,+popcnt,+sse4.2",
+    "-C", "llvm-args=-force-vector-interleave=4",
+    "-C", "llvm-args=--inline-threshold=1500",
+]
+
+[alias]
+b = "build --release"
+br = "build --release"
+r = "run --release"
+bench-fast = "bench --bench core_bench -- --quick"

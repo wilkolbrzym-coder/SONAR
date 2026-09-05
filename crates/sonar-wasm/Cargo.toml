@@ -1,0 +1,25 @@
+# Sonar WASM — the WebAssembly cdylib for the browser app.
+#
+# Exposes the engine through a small C-ABI (see src/lib.rs). Built with:
+#   cargo build --release --target wasm32-unknown-unknown -p sonar-wasm
+# Output: target/wasm32-unknown-unknown/release/sonar_wasm.wasm
+# (copied to web/engine.wasm by build-wasm.sh / CI).
+
+[package]
+name = "sonar-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Sonar engine WebAssembly build for the browser"
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sonar_wasm"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+sonar = { path = "../sonar-core" }
+serde_json = { workspace = true }

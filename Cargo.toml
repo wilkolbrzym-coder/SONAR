@@ -1,48 +1,32 @@
-# Sonar - the world's strongest battleship AI engine.
+# Sonar workspace — the world's strongest battleship AI engine.
 #
-# Pure Rust. Apache 2.0. Time-limited hypothesis search with
-# PDF density + Bayesian fleet inference + constraint propagation.
+# Pure Rust. Apache 2.0. Version 0.2.0-beta.1 (beta).
 #
-# Author: Sonar Contributors
-# License: Apache-2.0
-#
-# Version: 0.1.0 (experimental — may contain bugs)
+# Layout:
+#   crates/sonar-core  — the engine library + `sonar` CLI (lib + bin)
+#   crates/sonar-wasm  — WebAssembly cdylib for the browser app
 
-[package]
-name = "sonar"
-version = "0.1.0"
+[workspace]
+resolver = "3"
+members = ["crates/sonar-core", "crates/sonar-wasm"]
+
+[workspace.package]
+version = "0.2.0-beta.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Sonar Contributors"]
-description = "Sonar - the world's strongest battleship AI engine (pure Rust, Apache-2.0)"
 license = "Apache-2.0"
-readme = "README.md"
-repository = "https://github.com/your-org/sonar"
-keywords = ["battleship", "ai", "game-engine", "pdf", "bayesian"]
-categories = ["games", "algorithms"]
-build = "build.rs"
+repository = "https://github.com/wilkolbrzym-coder/SONAR"
+homepage = "https://github.com/wilkolbrzym-coder/SONAR"
 
-[lib]
-name = "sonar"
-path = "src/lib.rs"
-
-[[bin]]
-name = "sonar"
-path = "src/bin/sonar.rs"
-
-[[bench]]
-name = "core_bench"
-harness = false
-path = "benches/core_bench.rs"
-
-[dependencies]
+[workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-[dev-dependencies]
-criterion = "0.5"
-
-# Maximum optimization profile for Linux x86_64.
+# ── Shared profiles ─────────────────────────────────────────────────────────
+#
+# Maximum optimization. Portable across x86_64/aarch64 CPUs — no
+# target-cpu=native here (opt in via RUSTFLAGS for single-machine builds).
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -52,6 +36,15 @@ strip = "symbols"
 debug = false
 overflow-checks = false
 incremental = false
+
+# Release + runtime checks: same codegen path, but arithmetic overflow and
+# unwinding enabled. Used by CI, fuzzing, and anyone auditing the engine.
+[profile.release-checked]
+inherits = "release"
+panic = "unwind"
+overflow-checks = true
+debug = true
+strip = "none"
 
 [profile.bench]
 inherits = "release"

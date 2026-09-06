@@ -2,16 +2,21 @@
 
 **The world's strongest battleship AI engine.**
 
-Pure Rust · Apache-2.0 · PDF density + Bayesian hypothesis filter
+[![CI](https://github.com/wilkolbrzym-coder/SONAR/actions/workflows/ci.yml/badge.svg)](https://github.com/wilkolbrzym-coder/SONAR/actions/workflows/ci.yml)
+[![Pages](https://github.com/wilkolbrzym-coder/SONAR/actions/workflows/pages.yml/badge.svg)](https://github.com/wilkolbrzym-coder/SONAR/actions/workflows/pages.yml)
 
-- Version: **0.1.0** (experimental — may contain bugs)
-- License: Apache-2.0
-- Language: Rust (nightly)
-- Platform: Linux x86_64
+Pure Rust · Apache-2.0 · PDF density + Bayesian hypothesis filter · WebAssembly
 
-> **WARNING:** This is an experimental v0.1 release. It may contain bugs,
-> panics, or unexpected behaviour. Use at your own risk. Report issues on
-> the project repository.
+- Version: **0.2.0-beta.1** (beta — see the [stability contract](STABILITY.md))
+- Language: Rust (stable — 1.85+ required, developed and tested on 1.98.1)
+- Platform: Linux/macOS/Windows (native) + every modern browser (WebAssembly)
+- Tests: **122 Rust tests** + web verification suite, all green in CI
+
+> **0.2.0-beta ends the experimental era.** The 0.1.0 "may contain bugs or
+> panics" disclaimer is replaced by a written, continuously-tested
+> [stability contract](STABILITY.md): no reachable panics, bit-identical
+> deterministic replays, adversarially robust by construction, protocol v1
+> frozen.
 
 ---
 
@@ -20,778 +25,508 @@ Pure Rust · Apache-2.0 · PDF density + Bayesian hypothesis filter
 1. [What is Sonar?](#what-is-sonar)
 2. [Why is Sonar the strongest?](#why-is-sonar-the-strongest)
 3. [Quick start](#quick-start)
-4. [The Engine API](#the-engine-api)
-5. [GameRules — custom micro-modes](#gamerules--custom-micro-modes)
-6. [JSON IPC server](#json-ipc-server)
-7. [Python UI overlay](#python-ui-overlay)
-8. [CLI commands](#cli-commands)
-9. [Benchmark results](#benchmark-results)
-10. [Configuration](#configuration)
-11. [Architecture](#architecture)
-12. [Licence](#licence)
-13. [Benchmark methodology and code](#benchmark-methodology-and-code)
+4. [The web app (GitHub Pages)](#the-web-app-github-pages)
+5. [Modding — 100% control from your browser](#modding--100-control-from-your-browser)
+6. [The Engine API tour](#the-engine-api-tour)
+7. [GameRules — custom micro-modes](#gamerules--custom-micro-modes)
+8. [The JSON protocol (v1)](#the-json-protocol-v1)
+9. [CLI reference](#cli-reference)
+10. [Benchmarks](#benchmarks)
+11. [Testing](#testing)
+12. [Adversarial robustness](#adversarial-robustness)
+13. [Architecture](#architecture)
+14. [Repository layout](#repository-layout)
+15. [Building from source](#building-from-source)
+16. [What changed from 0.1.0](#what-changed-from-010)
+17. [Roadmap to 1.0](#roadmap-to-10)
+18. [License](#license)
 
 ---
 
 ## What is Sonar?
 
 **Sonar** is a battleship AI engine written in pure Rust. It plays the
-classic 10x10 fleet game with the standard fleet (ships of length
-5, 4, 3, 3, 2 = 17 cells total). Sonar is:
+classic 10×10 fleet game with the standard fleet (ships of length
+5, 4, 3, 3, 2 — 17 cells total), and it plays it at state-of-the-art
+strength by combining three techniques:
 
-- **Strong** — it combines three state-of-the-art techniques (see below).
-- **Fast** — 128-bit bitboards, native CPU instructions (BMI1, BMI2,
-  AVX2, AVX512, POPCNT), zero allocations in hot paths.
-- **Self-contained** — no external AI services, no Python runtime
-  required for the engine itself.
-- **Fully observable and controllable** — every internal state is
-  exposed through a clean public API.
-- **Time-limited, not count-limited** — the only knob for search
-  depth is a wall-clock deadline (1s to 60s per move). When you set
-  20 seconds, Sonar thinks for exactly 20 seconds, continuously
-  generating and evaluating hypotheses.
-- **Configurable** — custom fleets and custom contact/sink rules via `GameRules`. (Note: dynamic bitboards for custom board sizes 5-10 are planned for **v0.2**; v0.1 is optimized exclusively for 10x10).
+1. **PDF density targeting** — for every cell on the board, Sonar computes
+   the number of legal ship placements that pass through it given *all*
+   observations so far (misses, hits, sinks). It fires at the densest cell.
+   This is the exact-in-model computation: one pass over the placement
+   table, no sampling error.
 
----
+2. **Bayesian hypothesis filtering** — Sonar maintains a sample of complete
+   fleet configurations consistent with every observation. Each shot
+   discards inconsistent hypotheses; the surviving set forms a posterior
+   probability per cell. Theoretically sharper than the PDF (it models the
+   mutual exclusion between ships) but noisy at small budgets — so the
+   hybrid **blends** the two with an adaptive weight `n/(n+K)` (measured:
+   never worse than PDF at low budgets, +6 to +12 percentage points at
+   512–1024+ hypotheses).
+
+3. **Constraint-dispersal placement** — Sonar's own fleet is placed by
+   random sampling with a penalty score (ship-to-ship contact, edge/corner
+   exposure, parity balance). The final fleet is drawn **uniformly from a
+   near-optimal ε-band** rather than taking the argmin — a mixed strategy
+   that keeps the defensive quality while making the placement
+   statistically hard to fingerprint.
+
+Sonar is fully self-contained: no external AI services, no Python runtime,
+no network calls, no telemetry. The same Rust code compiles natively
+(CLI + library) and to WebAssembly (the browser app below).
 
 ## Why is Sonar the strongest?
 
-Sonar fuses three algorithms that are each state-of-the-art on their
-own. Together they are stronger than any individual technique:
+Because every claim is **measured, seeded, and reproducible**:
 
-### 1. PDF density targeting
+| Claim | Evidence (see [BENCHMARKS.md](BENCHMARKS.md)) |
+|---|---|
+| Beats the classic algorithms overwhelmingly | vs HuntTarget **90.0%** (60 games), vs MonteCarlo-256/512 **100%** |
+| The hypothesis filter adds real strength | +6–12 pp over pure PDF at 512–1024 hypotheses, scaling with budget |
+| Beats a strong PDF opponent | 56.7–65% vs BurnsPdf-style reference (budget-dependent, documented) |
+| The algorithm — not compute — carries the advantage | Opponent with **2× the time**: Sonar still wins; opponent with **2× the hypotheses**: +10 pp, not a blowout |
+| Fair game loop | Identical bots split 48/52 (CI contains 50%) — no first-mover structural bias |
+| Invincible in your browser | 20/20 vs random in the WASM engine; the browser test tab re-verifies the engine live |
 
-For every cell on the board we compute the number of legal ship
-placements that pass through it, given the current observations
-(misses, hits, sinks). We fire at the cell with the highest density.
-This is the algorithm described by Ethan Burns (Dartmouth) and is
-the baseline used by every competitive battleship AI.
-
-### 2. Bayesian hypothesis filter
-
-We maintain a *sample* of full fleet configurations that are
-consistent with everything we have observed so far. After every shot
-we discard configurations that contradict the new information. The
-firing decision is the argmax over the surviving hypotheses.
-
-There is **no fixed cap** on the number of hypotheses. The generator
-runs cooperatively and yields as soon as the deadline expires. More
-time means more hypotheses, which means a sharper probability
-distribution.
-
-When a deadline is set (e.g. 20 seconds), Sonar enters a **continuous
-thinking loop**: it generates batches of hypotheses, re-evaluates the
-best move, and keeps refining until the deadline expires. This ensures
-the full time budget is used.
-
-### 3. Constraint-dispersal placement
-
-Our own fleet is placed by sampling `N` random legal configurations
-and picking the one with the smallest penalty:
-
-| Penalty component       | Weight | Why                                                |
-|-------------------------|--------|----------------------------------------------------|
-| Ship-to-ship contact    | 10.0   | Touching ships are easier to chain-sink            |
-| Touching the board edge | 0.3    | Edges give the opponent fewer neighbours to search |
-| Corner cells            | 1.5    | PDFs love the centre; we avoid it                  |
-| Parity imbalance        | 8.0    | A balanced fleet defeats hunt-phase parity         |
-
----
+And because it is **adversarially robust by construction** — an opponent
+that collects a million games and trains a model on them cannot find a
+behavioral fingerprint to exploit, because the code has none (details in
+[Adversarial robustness](#adversarial-robustness)).
 
 ## Quick start
 
 ```bash
-# Build (requires Rust nightly; we use #![feature(test)])
+# Build (stable Rust, no nightly needed since 0.2.0)
 cargo build --release
 
-# Play vs Sonar in the terminal
+# Play against the engine in the terminal
 ./target/release/sonar play
 
-# Launch the Python GUI overlay (fullscreen, adaptive)
-python3 python/run.py
+# Run the full test suite (122 tests)
+cargo test --release
 
-# Benchmark Sonar vs world-class opponents
-./target/release/sonar bench-ref 30
-./target/release/sonar bench-2x  10   # opponent gets 2x the move time
+# Benchmarks with Wilson 95% confidence intervals
+./target/release/sonar bench
 ```
 
----
+Or in ~30 seconds without any Rust toolchain — in your browser: the
+[web app](#the-web-app-github-pages) below runs the identical engine
+compiled to WebAssembly.
 
-## The Engine API
-
-The `Engine` struct is the single entry point for everything Sonar
-can do. It owns the board, the enemy view, the targeting strategy,
-the PRNG, and the learning database.
-
-### Example: play one move
-
-```rust
-use sonar::{Engine, EngineConfig, Deadline, ShotResult};
-
-let mut engine = Engine::new(EngineConfig::default());
-engine.place_fleet_smart();                     // our fleet
-let (r, c) = engine.choose_move(Deadline::from_secs(20));
-println!("Sonar fires at {}", sonar::helpers::format_coordinate(r, c));
-```
-
-### Example: observe the result and continue
-
-```rust
-engine.observe_result(r, c, ShotResult::Hit);
-let (r2, c2) = engine.choose_move(Deadline::from_secs(20));
-```
-
-### Example: rich suggestion with metadata
-
-```rust
-let suggestion = engine.suggest_move(Deadline::from_secs(20));
-println!("{:#?}", suggestion);
-// MoveSuggestion {
-//     row: 5,
-//     col: 4,
-//     coordinate: "E6",
-//     confidence: 0.42,
-//     hypothesis_count: 983,
-//     elapsed_us: 19_984_221,
-// }
-```
-
-### Example: inspect internal state
-
-```rust
-let snap = engine.snapshot();
-println!("{:#?}", snap);
-// EngineSnapshot {
-//     our_fleet_mask: "154910333568575050916888576",
-//     our_shots_mask: "0",
-//     enemy_remaining: [5, 4, 3, 3, 2],
-//     hypothesis_count: 983,
-//     density_matrix: [0.0, 0.0, 1.5, 3.2, ...],
-//     moves_fired: 1,
-// }
-```
-
-### Full API surface
-
-| Method                          | Purpose                                            |
-|---------------------------------|----------------------------------------------------|
-| `Engine::new(cfg)`              | Construct with config                              |
-| `Engine::with_strategy(box)`    | Plug in a custom `TargetingStrategy`               |
-| `place_fleet_smart()`           | Penalty-minimising placement                       |
-| `place_fleet_random()`          | Uniformly random legal placement                   |
-| `place_fleet_manual(&ships)`    | Place a specific fleet (returns `Err` on illegal)  |
-| `choose_move(deadline)`         | Ask for next shot (deadline-aware)                 |
-| `suggest_move(deadline)`        | Like `choose_move` + metadata (confidence, etc.)   |
-| `observe_result(r, c, res)`     | Feed back the result of our shot                   |
-| `receive_shot(r, c)`            | Apply an incoming enemy shot, return result        |
-| `is_defeated()`                 | Have we lost?                                      |
-| `snapshot()`                    | Serializable internal state                        |
-| `probability_matrix()`          | 100-cell ship-probability from hypotheses          |
-| `density_matrix()`              | 100-cell PDF density                               |
-| `record_game(won)`              | Persist this game to the learning DB               |
-| `save_learning()`               | Force-save the learning DB                         |
-| `reset()`                       | New game (same config)                             |
-| `reseed(seed)`                  | Deterministic PRNG for tests                       |
-| `config()` / `config_mut()`     | Read/modify the config                             |
-| `apply_config()`                | Re-apply mutated config to sub-components          |
-| `rules()` / `rules_mut()`       | Read/modify the game rules                         |
-| `apply_rules()`                 | Validate and apply rule changes                    |
-
----
-
-## GameRules — custom micro-modes
-
-Sonar supports custom game variants beyond standard 10x10 Battleship.
-The `GameRules` struct controls:
-
-- **Board size** (locked to 10 in v0.1; dynamic bitboards for sizes 5-10 are planned for **v0.2**)
-- **Ship lengths** (any set of lengths, each 1..=10)
-- **Contact rule** — how ships may touch:
-  - `NoContact` — ships may not touch at all (standard)
-  - `AllowCornerContact` — diagonal touch only
-  - `AllowContact` — free touching
-- **Sunk rule** — what happens when a ship sinks:
-  - `RevealNeighbors` — surrounding cells marked as misses (standard)
-  - `NoReveal` — only the ship cells are marked
-
-### Example: custom 7x7 game with 3 ships
-
-```rust
-use sonar::{Engine, EngineConfig, GameRules, ContactRule, SunkRule, Deadline};
-
-let rules = GameRules {
-    board_size: 7,
-    ship_lengths: vec![4, 3, 2],
-    contact_rule: ContactRule::AllowCornerContact,
-    sunk_rule: SunkRule::NoReveal,
-};
-
-let mut engine = Engine::new(EngineConfig {
-    rules,
-    ..Default::default()
-});
-
-engine.place_fleet_smart();
-let (r, c) = engine.choose_move(Deadline::from_secs(10));
-```
-
-### Example: via JSON IPC
-
-```json
-> {"cmd":"set_rules","rules":{"board_size":7,"ship_lengths":[4,3,2],"contact_rule":"AllowCornerContact","sunk_rule":"NoReveal"}}
-< {"ok":true}
-
-> {"cmd":"rules"}
-< {"board_size":7,"ship_lengths":[4,3,2],"contact_rule":"AllowCornerContact","sunk_rule":"NoReveal"}
-```
-
----
-
-## JSON IPC server
-
-Sonar can run as a long-lived process that communicates over
-newline-delimited JSON on stdin/stdout. This is how the Python UI
-overlay (and any non-Rust client) drives the engine.
+### Drive the engine from any language
 
 ```bash
 ./target/release/sonar serve
 ```
 
-### Protocol
-
-Each request is one JSON line with a `cmd` field. Each reply is one
-JSON line.
-
-| Command         | Request                                             | Reply                              |
-|-----------------|-----------------------------------------------------|------------------------------------|
-| `place_random`  | `{"cmd":"place_random"}`                            | `{"ok":true}`                      |
-| `place_smart`   | `{"cmd":"place_smart"}`                             | `{"ok":true}`                      |
-| `place_manual`  | `{"cmd":"place_manual","ships":[[r,c,len,h],...]}` | `{"ok":true}` or `{"ok":false,...}`|
-| `choose_move`   | `{"cmd":"choose_move","deadline_secs":20}`          | `{"row":R,"col":C}`                |
-| `suggest_move`  | `{"cmd":"suggest_move","deadline_secs":20}`         | `MoveSuggestion` (JSON)            |
-| `observe`       | `{"cmd":"observe","r":R,"c":C,"result":"miss"}`     | `{"ok":true}`                      |
-| `receive_shot`  | `{"cmd":"receive_shot","r":R,"c":C}`                | `{"result":"miss"}`                |
-| `snapshot`      | `{"cmd":"snapshot"}`                                | `EngineSnapshot` (JSON)            |
-| `config`        | `{"cmd":"config"}`                                  | `EngineConfig` (JSON)              |
-| `set_config`    | `{"cmd":"set_config","config":{...}}`               | `{"ok":true}`                      |
-| `rules`         | `{"cmd":"rules"}`                                   | `GameRules` (JSON)                 |
-| `set_rules`     | `{"cmd":"set_rules","rules":{...}}`                 | `{"ok":true}` or `{"ok":false,...}`|
-| `reset`         | `{"cmd":"reset"}`                                   | `{"ok":true}`                      |
-| `record_game`   | `{"cmd":"record_game","won":true}`                  | `{"ok":true}`                      |
-| `learning`      | `{"cmd":"learning"}`                                | `{"games":N,"wins":N,...}`         |
-| `quit`          | `{"cmd":"quit"}`                                    | (closes stdin)                     |
-
----
-
-## Python UI overlay
-
-A multi-file Tkinter GUI that talks to `sonar serve`:
-
-```bash
-python3 python/run.py
-```
-
-The Python UI is **just a wrapper** — every decision is made by the
-Rust engine. The UI sends `choose_move` requests, displays the
-results, and feeds back observations.
-
-### Features
-
-- **Fullscreen, adaptive layout** — boards resize to fill the window
-- **Three modes**:
-  - **Team Mode** — Sonar advises a move; you fire at a paper board
-    and report the result (miss/hit/sunk). Sonar waits for your
-    feedback before suggesting the next move.
-  - **Play vs Bot** — Sonar places ships for you; you fire at Sonar's
-    board and Sonar fires back.
-  - **Benchmark** — run self-play and reference benchmarks from the UI.
-- **Settings dialog** — adjust move time (5..60s)
-- **When you set 20 seconds, Sonar thinks for exactly 20 seconds**
-  (continuous hypothesis generation)
-
-### File structure
-
-```
-python/
-  run.py                    — convenience launcher
-  sonar_ui/
-    __init__.py             — package docstring
-    main.py                 — entry point
-    app.py                  — main application window (fullscreen)
-    client.py               — JSON IPC client (SonarClient)
-    board_view.py           — adaptive board rendering widget
-    settings_dlg.py         — settings dialog (time, rules)
-    team_mode.py            — team mode frame
-    play_mode.py            — play vs bot frame
-    benchmark_mode.py       — benchmark frame
-```
-
-### Controls
-
-| Key / Action            | Effect                                |
-|-------------------------|---------------------------------------|
-| Click enemy board       | Fire at that cell                     |
-| `S`                     | Ask Sonar for a suggestion            |
-| Menu > File > New Game  | Reset current mode                    |
-| Menu > File > Settings  | Open settings dialog                  |
-| `F11` / `Esc`           | Toggle fullscreen                     |
-| `Ctrl+N`                | New game                              |
-| `Ctrl+Q`                | Quit                                  |
-
-Set `$SONAR_BIN` to point to the `sonar` binary if it is not on
-`$PATH`.
-
----
-
-## CLI commands
-
-```text
-sonar                 show help
-sonar bench           100-game self-play benchmark
-sonar bench-fast       20-game self-play benchmark
-sonar bench-big       500-game self-play benchmark
-sonar bench-ref [N]   N games vs reference bots (default 50)
-sonar bench-ext [N]   N games vs external Python engine
-sonar bench-2x  [N]   N games where the opponent gets 2x the time
-sonar play            play vs Sonar in the terminal
-sonar serve           run as JSON IPC server on stdin/stdout
-sonar learning        show learning database stats
-```
-
----
-
-## Benchmark results
-
-### Results summary
-
-| Match-up                                  | Win rate | Notes |
-|-------------------------------------------|----------|-------|
-| **Sonar vs HuntTarget**                   | **97.6%**  | Classic hunt+target (1000 games) |
-| **Sonar vs BurnsPdf**                     | **56.2%**  | Pure PDF density (1000 games) |
-| **Sonar vs MonteCarlo-256**               | **100%**   | MC sampling (50 games) |
-| **Sonar vs MonteCarlo-512**               | **100%**   | MC sampling (50 games) |
-| Sonar vs Sonar (coherence)                | 50/50    | No first-mover bias |
-
-> Benchmark mode uses `Deadline::none()` (fast, no time limit) with
-> `soft_target=256` hypotheses. Each game takes ~36ms on average.
-> In real games with 20s thinking time, Sonar is significantly stronger
-> due to the continuous thinking loop.
-
-### Sonar vs reference bots (published algorithms)
-
-The `sonar bench-ref` command plays Sonar against a set of bots that
-implement well-known published algorithms.
-
-#### Reference bot catalogue
-
-| Bot            | Algorithm | Source |
-|----------------|-----------|--------|
-| `HuntTarget`   | Hunt-phase parity + target-phase 4-neighbour expansion | Wikipedia, standard textbook |
-| `BurnsPdf`     | PDF density targeting (Burns, Dartmouth) | Ethan Burns research, Dartmouth |
-| `MonteCarlo-N` | Monte Carlo fleet sampling (N samples per move) | mitchelljy/battleships_ai |
-
-#### Results (1000 games each for HuntTarget and BurnsPdf, 50 for MonteCarlo)
-
-```
->>> Sonar-Hybrid vs HuntTarget (1000 games)
-  Wins: 976/1000 (97.6%) | avg 35.6 moves/win
-  Time: 39.175s
-
->>> Sonar-Hybrid vs BurnsPdf (1000 games)
-  Wins: 562/1000 (56.2%) | avg 33.1 moves/win
-  Time: 36.082s
-
->>> Sonar-Hybrid vs MonteCarlo-256 (50 games)
-  Wins: 50/50 (100.0%) | avg 35.7 moves/win
-  Time: 2.124s
-
->>> Sonar-Hybrid vs MonteCarlo-512 (50 games)
-  Wins: 50/50 (100.0%) | avg 36.5 moves/win
-  Time: 2.859s
-```
-
-#### Interpretation
-
-- **HuntTarget** is the easiest: it has no global probability model,
-  so Sonar's PDF + hypotheses crush it.
-- **BurnsPdf** is the hardest of the reference bots — it uses the same
-  PDF density algorithm as Sonar's fallback, so the difference is
-  purely Sonar's Bayesian hypothesis filter on top.
-- **MonteCarlo** bots are slow and weak — they sample random fleets
-  but don't have the constraint propagation that Sonar's PDF provides.
-
-### Sonar with 2x time disadvantage
-
-The `sonar bench-2x` command tests Sonar under a handicap: Sonar gets
-5 seconds per move, the opponent gets 10 seconds per move. With the
-continuous thinking loop, Sonar uses its full 5-second budget.
-
-```
->>> Sonar (5s/move) vs BurnsPdf (10s/move) — 5 games
-  Wins: 1/5 (20.0%)
-  Time: 25.038s
-
->>> Sonar (5s/move) vs MonteCarlo-512 (10s/move) — 5 games
-  Wins: 5/5 (100.0%)
-  Time: 25.272s
-```
-
-#### Interpretation
-
-- **vs BurnsPdf at 2x disadvantage:** 20% — BurnsPdf with 10s
-  generates a very dense PDF that is hard to beat with only 5s.
-  In normal play (equal time), Sonar beats BurnsPdf 53% of the time.
-- **vs MonteCarlo at 2x disadvantage:** 100% — Monte Carlo can't use
-  the extra time effectively because each sample is independent.
-
-### Self-play coherence test
-
-`sonar bench` includes a Sonar-vs-Sonar match to verify there is no
-first-mover bias. Expected: ~50/50.
-
-```
->>> Sonar-Hybrid vs Sonar-Hybrid (20 games, coherence test)
-  Hybrid(P1): 10 wins (50.0%)
-  Hybrid(P2): 10 wins (50.0%)
-  Expected ~50/50 if there is no first-mover bias.
-```
-
----
-
-## Micro-learning database
-
-Sonar optionally records every finished game to a JSON file and uses
-the accumulated history to bias future placement and targeting
-decisions.
-
-### Location
-
-- **Linux:** `~/.local/share/sonar/learning.json`
-- **Override:** set `$SONAR_LEARNING_PATH` to a custom path
-
-### When is it written?
-
-The learning database is written when you call `engine.record_game(won)`
-(or send `{"cmd":"record_game","won":true}` over JSON IPC). Benchmark
-mode disables learning (`.without_learning()`) for fair comparison.
-
-### What is stored?
+then speak newline-delimited JSON on stdin/stdout:
 
 ```json
-{
-  "version": 1,
-  "games": [
-    {
-      "my_fleet_mask": "154910333568575050916888576",
-      "my_shots": [[0, true], [11, false], ...],
-      "won": true,
-      "moves": 35,
-      "fleet_lengths": [5, 4, 3, 3, 2],
-      "timestamp": 1720000000
+{"cmd":"new_game","seed":42}
+{"cmd":"place_smart"}
+{"cmd":"choose_move","deadline_secs":20}
+{"cmd":"receive_shot","r":5,"c":6}
+{"cmd":"observe","r":5,"c":6,"result":"sunk_3"}
+{"cmd":"snapshot"}
+```
+
+Full command reference: [the JSON protocol](#the-json-protocol-v1).
+
+## The web app (GitHub Pages)
+
+The `web/` directory is a complete, dependency-free single-page
+application — plain HTML/CSS/JS, no build step — that runs the full
+Sonar engine in your browser via WebAssembly. **Everything happens
+locally on your machine**: the engine, the docs search, the test suite,
+the mod runtime. No servers, no accounts, no telemetry.
+
+| Tab | What it does |
+|---|---|
+| **Play** | Full battleship vs Sonar: 5 difficulty levels (= hypothesis budgets), manual ship placement editor with live legality preview, auto-place, move log, and a live **heatmap of how Sonar sees your fleet** (its full Bayesian posterior, exposed). |
+| **Team** | Advisor mode for playing a real-world/paper opponent: enter the results of your physical shots, Sonar suggests the next move with confidence, hypothesis count and timing. |
+| **Mods** | A complete modding environment: JavaScript code editor, example mods, and an **arena** that plays your mod against the engine with win rates, Wilson CIs and error logs. |
+| **Test** | Runs the verification suite **live in your browser** against the WASM engine: protocol contract, determinism replays, self-play invariants, strength gates, hostile-input robustness. The same suite runs in CI via Node. |
+| **Docs** | The full documentation with a client-side search engine (TF-scored, prefix-matching, highlighted snippets) — zero network requests. |
+
+### Deploying to GitHub Pages
+
+The repository ships a ready workflow (`.github/workflows/pages.yml`):
+on every push to `main` it rebuilds the WASM engine from source, runs the
+web verification suite, and publishes `web/` to GitHub Pages. Enable Pages
+(Repo → Settings → Pages → Source: **GitHub Actions**) once — after that
+every push deploys automatically.
+
+To run locally:
+
+```bash
+./scripts/build-wasm.sh           # builds wasm → web/engine.wasm
+cd web && python3 -m http.server 8123
+# open http://localhost:8123
+```
+
+The app is also a PWA (installable, works offline — the engine and docs
+are cached by the service worker).
+
+## Modding — 100% control from your browser
+
+Sonar's mod API exposes **everything the engine itself sees**. A mod is a
+JavaScript object with up to four hooks, written directly in the app's
+Mods tab and executed inside a Web Worker (full performance, the UI never
+blocks):
+
+```js
+const mod = {
+  name: "Posterior Sniper",
+  version: "1.0",
+
+  // Optional: place YOUR fleet. Return [{r, c, len, horizontal}, ...]
+  // or null for a random legal fleet.
+  placeFleet(api) {
+    return api.legalFleet(myFleet) ? myFleet : api.randomFleet();
+  },
+
+  // Required: pick the next shot at the enemy fleet.
+  chooseMove(api) {
+    // api.shots / api.hits / api.sunk / api.activeHits — Uint8Array(100)
+    //   masks of the fleet you are attacking (your own observations).
+    // api.remaining — surviving enemy ship lengths.
+    // api.density — Sonar's PDF density matrix (Float32Array(100)).
+    // api.probability — Sonar's Bayesian posterior (Float32Array(100)).
+    // api.hypothesisCount, api.history, api.moveNumber,
+    // api.valid(r,c), api.argmax(matrix), api.rand().
+    let best = 0;
+    for (let i = 0; i < 100; i++) {
+      if (!api.shots[i] && api.probability[i] > api.probability[best]) best = i;
     }
-  ]
-}
+    return { r: Math.floor(best / 10), c: best % 10 };
+  },
+
+  // Optional: the enemy fired at YOUR fleet at (r, c).
+  onObserve(api, r, c, result) {},
+  onGameEnd(api, won, moves) {},
+};
 ```
 
-### Inspecting the database
+**Fair play is enforced**: an illegal move (out of bounds, already fired,
+malformed return) is auto-corrected to a random legal cell and counted as
+a strike; three strikes forfeit the game. Exceptions surface in the arena
+report. The arena plays N games of your mod vs the engine at a chosen
+difficulty and reports win rates with Wilson 95% intervals.
 
-```bash
-sonar learning
-```
+The repo ships four example mods (`web/mods.js`): *Parity Hunter*
+(classic baseline), *Density Rider* (rides the PDF matrix), *Posterior
+Sniper* (blends posterior + density — the strongest example), and *Edge
+Ghost* (sneaky border placement + checkerboard hunt).
 
-Or via JSON IPC:
-
-```json
-> {"cmd":"learning"}
-< {"games":42,"wins":28,"losses":14,"win_rate":66.7,"path":"~/.local/share/sonar/learning.json"}
-```
-
----
-
-## Configuration
+## The Engine API tour
 
 ```rust
-EngineConfig {
-    hypothesis_soft_target: 1024,   // soft cap (deadline is the real limit)
-    smart_placement: true,          // intelligent fleet placement
-    placement: PlacementConfig {    // placement penalties
-        candidates: 1024,
-        penalty_contact: 10.0,
-        penalty_edge: 0.3,
-        penalty_corner: 1.5,
-        parity_balance: true,
-    },
-    default_deadline_secs: 20,      // 1..60
-    use_learning: true,             // persist games to JSON
-    learning_path: None,            // None → ~/.local/share/sonar/learning.json
-    rules: GameRules {              // game rules (micro-modes)
-        board_size: 10,
-        ship_lengths: vec![5, 4, 3, 3, 2],
-        contact_rule: ContactRule::NoContact,
-        sunk_rule: SunkRule::RevealNeighbors,
-    },
-}
+use sonar::{Engine, EngineConfig, Deadline, ShotResult};
+
+let mut engine = Engine::new(EngineConfig {
+    use_learning: false,             // passive statistics only
+    hypothesis_soft_target: 1024,    // the strength knob
+    default_deadline_secs: 20,       // competitive pondering time
+    ..Default::default()
+});
+
+// Place our fleet — Sonar's ε-band mixed strategy (or place manually).
+engine.place_fleet_smart();
+
+// Ask for a move (deadline-limited), fire, and feed the result back.
+let (r, c) = engine.choose_move(Deadline::from_secs(20));
+let result: ShotResult = opponent_board.shoot(r, c);
+engine.observe_result(r, c, result);
+
+// Full observability — 100% of the engine's internal state:
+let snap = engine.snapshot();        // masks, matrices, hypothesis count
+let prob = engine.probability_matrix(); // Bayesian posterior per cell
+let dens = engine.density_matrix();     // PDF density per cell
+let hyps = engine.hypothesis_count();   // live filter size
+
+// Determinism: same seed + work-limited search ⇒ bit-identical replay.
+engine.reseed(42);
+let (r, c) = engine.choose_move(Deadline::none());
 ```
 
-Environment variables:
+Highlights:
 
-| Variable                | Purpose                                  |
-|-------------------------|------------------------------------------|
-| `SONAR_LEARNING_PATH`   | Override the learning DB file path       |
-| `SONAR_BIN`             | Path to the `sonar` binary (for Python)  |
-| `SONAR_MOVE_SECS`       | Default move deadline for `sonar play`   |
+* **Pluggable strategy**: implement `TargetingStrategy` (`choose`,
+  `observe`, `reset`, `stats`) and install it with `with_strategy`.
+* **Custom rules**: `EngineConfig.rules` (see below).
+* **No hidden state**: `reset()` restores byte-identical first-move
+  behaviour (tested); recorded games are passive statistics that never
+  influence play.
 
----
+## GameRules — custom micro-modes
+
+```rust
+use sonar::{GameRules, ContactRule, SunkRule};
+
+let rules = GameRules {
+    board_size: 7,                    // 5..=10
+    ship_lengths: vec![4, 3, 2],      // any composition (validated)
+    contact_rule: ContactRule::AllowCornerContact,
+    sunk_rule: SunkRule::NoReveal,    // neighbours not auto-revealed
+};
+```
+
+`ContactRule`: `NoContact` (standard — ships never touch), `AllowCornerContact`
+(diagonal touching allowed), `AllowContact` (free touching).
+`SunkRule`: `RevealNeighbors` (standard — the sink reveals surrounding
+water) or `NoReveal` (harder — no free information on a sink).
+Every combination is validated (`GameRules::validate`) and exercised by
+generated rule-matrix tests.
+
+## The JSON protocol (v1)
+
+One request per line, one reply per line. **Frozen**: existing commands
+never change; evolution is additive-only.
+
+| Command | Request | Reply |
+|---|---|---|
+| `version` | `{"cmd":"version"}` | `{"name","version","channel","protocol","language","features"}` |
+| `new_game` | `{"cmd":"new_game","seed":S,"config":{…}?}` | `{"ok":true,"seed":S}` |
+| `place_random` | `{"cmd":"place_random"}` | `{"ok":true}` |
+| `place_smart` | `{"cmd":"place_smart"}` | `{"ok":true}` |
+| `place_manual` | `{"cmd":"place_manual","ships":[[r,c,len,h],…]}` | `{"ok":true}` or `{"ok":false,"error","bad_index"}` |
+| `choose_move` | `{"cmd":"choose_move","deadline_secs":N}` | `{"row":R,"col":C}` |
+| `suggest_move` | `{"cmd":"suggest_move","deadline_secs":N}` | `MoveSuggestion` (row, col, coordinate, confidence, hypothesis_count, elapsed_us) |
+| `receive_shot` | `{"cmd":"receive_shot","r":R,"c":C}` | `{"result":"miss"\|"hit"\|"sunk","len":L?}` |
+| `observe` | `{"cmd":"observe","r":R,"c":C,"result":"miss"\|"hit"\|"sunk_L"}` | `{"ok":true}` |
+| `snapshot` | `{"cmd":"snapshot"}` | `EngineSnapshot` (masks, remaining, matrices, counts) |
+| `probability` | `{"cmd":"probability"}` | `{"matrix":[100 floats],"hypothesis_count":N}` |
+| `density` | `{"cmd":"density"}` | `{"matrix":[100 floats]}` |
+| `config` / `set_config` | `{"cmd":"set_config","config":{…}}` | config echo / `{"ok":true}` |
+| `rules` / `set_rules` | `{"cmd":"set_rules","rules":{…}}` | rules echo / `{"ok":true}` |
+| `reseed` | `{"cmd":"reseed","seed":S}` | `{"ok":true}` |
+| `reset` | `{"cmd":"reset"}` | `{"ok":true}` |
+| `record_game` | `{"cmd":"record_game","won":B}` | `{"ok":true}` |
+| `learning` | `{"cmd":"learning"}` | statistics summary |
+| `bench` | `{"cmd":"bench","games":N,"opponent":"random"\|"pdf"\|"self","soft_target":N,"seed":S}` | benchmark report with Wilson CIs |
+| `quit` | `{"cmd":"quit"}` | closes the stream (stdio transport) |
+
+Notes:
+
+* The `len` field on `receive_shot` replies is the additive v1.1 extension
+  (0.1.0 lost the sunk length on the wire, which made wire-driven games
+  strictly weaker; clients should observe `"sunk_<len>"`).
+* `deadline_secs: 0` selects the fast work-limited path (used by the
+  browser, where wall-clock deadlines do not exist).
+* **Hostile input policy**: every malformed line receives a JSON error
+  reply; the engine never panics and remains fully usable afterwards
+  (continuously tested with a garbage battery).
+
+## CLI reference
+
+```
+sonar                        show help
+sonar version                version, channel, protocol, license
+sonar play                   play vs Sonar in the terminal ($SONAR_MOVE_SECS)
+sonar serve                  JSON IPC server on stdin/stdout
+sonar learning               game statistics database (passive)
+sonar bench            [N]   self-play benchmark, Wilson CIs (default 100)
+sonar bench-fast       [N]   quick 20-game benchmark
+sonar bench-big        [N]   500-game benchmark
+sonar bench-ref        [N]   vs published reference bots (default 50)
+sonar bench-2x         [N]   time-handicap: opponent gets 2× the move time
+sonar bench-half       [N]   compute-handicap: opponent gets 2× the hypotheses
+```
+
+## Benchmarks
+
+Full methodology, environment, raw tables and re-run commands:
+**[BENCHMARKS.md](BENCHMARKS.md)**. Headlines (1024 hypotheses, 100/60-game
+runs, Wilson 95% CIs):
+
+* vs Random: **100.0%** [96.3, 100.0]
+* vs HuntTarget: **90.0%** · vs MonteCarlo-256/512: **100%**
+* vs strong PDF reference: **56.7–65%** (budget-scaling documented)
+* Full game (hybrid vs random): **~44 ms** · PDF density: **~5 µs** ·
+  hypothesis regen 256: **~73 µs** (criterion micro-benchmarks)
+* Deterministic seeds: the same seed replays the same games bit-for-bit.
+
+## Testing
+
+Sonar is verified by 122 Rust tests plus a browser/Node web suite —
+six layers, all green in CI:
+
+| Layer | Files | What it proves |
+|---|---|---|
+| Unit | inline `#[cfg(test)]` in every module | each component in isolation |
+| Determinism | `tests/determinism.rs` | same seed ⇒ bit-identical games; `reset() == fresh engine`; benchmark seed purity |
+| Invariants | `tests/invariants.rs` | 5 invariants checked after *every move* of 30 full games: no repeat shots, no shots at known misses, no shots at sunk neighbourhoods, games always terminate, board bookkeeping consistent |
+| Property | `tests/property.rs` | 8 randomised properties × 500 cases (custom harness, no deps): fleet legality, ship-mask geometry, view consistency, rules validation soundness, bitboard closure |
+| Protocol | `tests/protocol.rs` | full games over the wire, golden response shapes, a hostile garbage battery that must never crash the engine |
+| Statistics | `tests/strength.rs`, `tests/placement_statistics.rs` | strength gates with Wilson CIs (regression alarms), placement bias bounds, two-sample distribution stability |
+| Web | `scripts/test-web.mjs`, `scripts/test-suite.mjs`, `scripts/test-mods.mjs` | the WASM engine end-to-end, the browser test suite in Node, and the mod runtime — the same code the site runs |
+
+Run everything: `./sonar-forge.sh` (build → test → bench → wasm → web).
+
+## Adversarial robustness
+
+Threat model: an attacker collects thousands of games and trains a model
+(RL agent / classifier) to exploit statistical regularities.
+
+* **Targeting is exploitable only if it deviates from the Bayes-optimal
+  posterior.** Sonar's targeting is a pure function of the public
+  observation sequence — no opponent identity, no history, no learned
+  bias. There is nothing to reverse-engineer. *Tested*: `reset()` must
+  restore first-move behaviour byte-for-byte; fresh engines with equal
+  observations produce equal distributions.
+* **Placement is a genuine policy and can leak a fingerprint — so it is a
+  bounded mixed strategy.** The 0.1.0 argmin placement was catastrophically
+  fingerprintable: all 36 border cells at **0.000 occupancy** (a free
+  "never shoot here" map for the attacker). The 0.2.0 ε-band draw keeps
+  every cell inside a measured band (0.057–0.204 at default ε=4) with
+  strictly non-touching ships. *Tested*: per-cell occupancy gates,
+  orientation balance 45–55%, two-sample stability.
+* **No cross-game state leaks.** The 0.1.0 "micro-learning" bias (past
+  games nudging future decisions) was **removed** — it was a textbook
+  exploit surface. The statistics database is passive: records never
+  influence play.
 
 ## Architecture
 
 ```
+┌───────────────────────────────────────────────────────────────┐
+│                      sonar (Engine API)                        │
+│  ┌──────────┐  ┌───────────────┐  ┌───────────────────────┐  │
+│  │  Board   │  │ TargetingStrat │  │    Placement          │  │
+│  │ u128     │  │ ┌───────────┐ │  │  ε-band sampling      │  │
+│  │ bitboards│  │ │ PDF       │ │  │  (GHOST FLEET v2)     │  │
+│  │          │  │ │ posterior │ │  └───────────────────────┘  │
+│  │          │  │ │ blend     │ │  ┌───────────────────────┐  │
+│  │          │  │ └───────────┘ │  │  Xoshiro256** PRNG    │  │
+│  │          │  └───────────────┘  └───────────────────────┘  │
+├───────────────────────────────────────────────────────────────┤
+│            json_server (protocol v1 — one truth)              │
+├──────────────────────┬────────────────────────────────────────┤
+│   CLI (play/serve/   │   sonar-wasm (C-ABI → WebAssembly)     │
+│   bench/…)           │   → web app: game, mods, tests, docs   │
+└──────────────────────┴────────────────────────────────────────┘
+```
+
+Key design decisions:
+
+* **One protocol, every surface.** The CLI stdio server, the WASM exports,
+  and the integration tests all funnel through the same
+  `json_server::handle_line` — a protocol bug fixed once is fixed
+  everywhere.
+* **Work-limited by default in the browser.** WASM has no trustworthy wall
+  clock; there `Deadline` degenerates to the hypothesis budget, keeping
+  moves fast, deterministic, and platform-independent.
+* **Zero dependencies in the hot path.** serde/serde_json for the
+  protocol; no rand, no rayon — the PRNG, bitboards, and statistics are
+  hand-rolled and property-tested.
+* **Panic-free by lint.** `clippy::unwrap_used`/`expect_used` denied;
+  `unsafe` only at the audited WASM FFI boundary.
+
+## Repository layout
+
+```
 sonar/
-├── Cargo.toml
-├── LICENSE                         Apache 2.0
-├── README.md                       this file
-├── .cargo/config.toml              native CPU + LTO flags
-├── src/
-│   ├── lib.rs                      public API surface
-│   ├── api.rs                      Engine struct (100% control)
-│   ├── engine.rs                   re-exports game::*
-│   ├── game.rs                     game loop
-│   ├── bitboard.rs                 128-bit bitboard
-│   ├── board.rs                    board logic
-│   ├── fleet.rs                    fleet definition
-│   ├── rng.rs                      xoshiro256** PRNG
-│   ├── placement.rs                intelligent placement
-│   ├── targeting.rs                PDF density
-│   ├── hypothesis.rs               Bayesian filter (time-limited, continuous thinking)
-│   ├── time_limit.rs               Deadline type
-│   ├── learning.rs                 JSON micro-learning
-│   ├── helpers.rs                  ultra-light helpers
-│   ├── rules.rs                    GameRules — configurable micro-modes
-│   ├── reference_bots.rs           published-algorithm opponents
-│   ├── external.rs                 Python-engine adapter
-│   ├── json_server.rs              JSON IPC server
-│   ├── player.rs                   Player trait + impls
-│   ├── benchmark.rs                self-play benchmark
-│   └── bin/
-│       └── sonar.rs                CLI binary (engine only, no TUI)
-├── python/
-│   ├── run.py                      convenience launcher
-│   └── sonar_ui/                   multi-file Python UI package
-│       ├── __init__.py
-│       ├── main.py
-│       ├── app.py                  main window (fullscreen, adaptive)
-│       ├── client.py               JSON IPC client
-│       ├── board_view.py           adaptive board widget
-│       ├── settings_dlg.py         settings dialog (time + rules)
-│       ├── team_mode.py            team mode (Sonar advises)
-│       ├── play_mode.py            play vs bot (bot places ships)
-│       └── benchmark_mode.py       benchmark runner
-└── benches/
-    └── core_bench.rs               criterion micro-benchmarks
+├── crates/
+│   ├── sonar-core/           # the engine library + `sonar` CLI
+│   │   ├── src/              # api, targeting, hypothesis, placement,
+│   │   │                     # board, bitboard, benchmark, json_server, …
+│   │   ├── benches/          # criterion micro-benchmarks
+│   │   └── tests/            # determinism, invariants, property,
+│   │                         # protocol, strength, placement statistics
+│   └── sonar-wasm/           # C-ABI cdylib → sonar_wasm.wasm
+├── web/                      # the GitHub Pages app (no build step)
+│   ├── index.html, style.css, app.js
+│   ├── worker.js             # engine host (Web Worker)
+│   ├── engine.js             # WASM glue (browser + Node)
+│   ├── mods.js               # mod runtime + example mods
+│   ├── tests.js              # the in-browser test suite
+│   ├── docs-data.js          # documentation content
+│   ├── search.js             # client-side search engine
+│   ├── sw.js, manifest.json  # PWA / offline
+│   └── engine.wasm           # committed build (CI rebuilds on deploy)
+├── scripts/                  # build-wasm.sh, test-web/test-suite/test-mods.mjs
+├── .github/workflows/        # ci.yml (gate), pages.yml (deploy)
+├── sonar-forge.sh            # one-command build+test+bench orchestrator
+├── BENCHMARKS.md             # measured performance (reproducible)
+└── STABILITY.md              # the beta stability contract
 ```
 
----
+## Building from source
 
-## Licence
-
-Apache-2.0. See `LICENSE` for the full text.
-
-```
-Copyright 2026 wo-coder
-
-Licensed under the Apache License, Version 2.0 (the "Licence");
-you may not use this file except in compliance with the Licence.
-You may obtain a copy of the Licence at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the Licence is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the Licence for the specific language governing permissions and
-limitations under the Licence.
-```
-
----
-
-## Benchmark methodology and code
-
-### Methodology
-
-All benchmarks use the standard Battleship rules:
-
-- 10x10 board
-- Fleet: 5, 4, 3, 3, 2 (17 cells total)
-- Ships may not touch (orthogonally or diagonally)
-- A "sink" reveals the surrounding cells as misses
-
-Each game is a fresh match between two engines. Both engines use the
-same fleet-placement algorithm (`place_best_fleet` with 1024 candidates
-and the default penalty configuration) so the comparison is purely
-about targeting strength.
-
-Engines play alternately until one side's fleet is fully sunk. There
-is no draw — the player with fewer moves wins ties.
-
-Benchmark mode uses `Deadline::none()` (no time limit, fast) with a
-small `soft_target` (8 hypotheses) for quick turnaround. Real games
-use a time deadline (e.g. 20s) which activates the continuous thinking
-loop.
-
-### Hardware and build flags
-
-| Component | Value |
-|-----------|-------|
-| OS        | Linux x86_64 |
-| Rust      | nightly (1.98+) |
-| Profile   | `release` (`opt-level=3`, `lto="fat"`, `codegen-units=1`, `panic="abort"`) |
-| CPU flags | `+bmi1,+bmi2,+avx2,+popcnt,+sse4.2,+avx512f` (remove `+avx512f` if your CPU doesn't support it) |
-| Extra     | `target-cpu=native`, `inline-threshold=1500`, `force-vector-interleave=4` |
-
-`.cargo/config.toml`:
-
-```toml
-[build]
-rustflags = [
-    "-C", "target-cpu=native",
-    "-C", "target-feature=+bmi1,+bmi2,+avx2,+popcnt,+sse4.2,+avx512f",
-    "-C", "llvm-args=-force-vector-interleave=4",
-    "-C", "llvm-args=--inline-threshold=1500",
-]
-```
-
-> [!NOTE]
-> If your CPU does not support AVX-512 instructions (e.g. older Intel Core or AMD Ryzen processors), compiling with `+avx512f` will cause compiler crashes or `illegal instruction (SIGILL)` errors during runtime. Simply remove `+avx512f` from the `rustflags` list in `.cargo/config.toml` before running `cargo build`.
-
-`Cargo.toml` (release profile):
-
-```toml
-[profile.release]
-opt-level = 3
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-strip = "symbols"
-overflow-checks = false
-incremental = false
-```
-
-### Reproducing
+Requirements: stable Rust ≥ 1.85 (tested on 1.98.1). No nightly.
 
 ```bash
-# Build
-cargo build --release
+cargo build --release            # native library + CLI
+cargo test --release             # 122 tests
+cargo bench                      # criterion micro-benchmarks
+./target/release/sonar bench     # strength benchmarks (Wilson CIs)
 
-# Run all benchmarks
-./target/release/sonar bench-fast       # 20-game self-play
-./target/release/sonar bench-ref 30     # vs reference bots
-./target/release/sonar bench-ext 5      # vs Python external
-./target/release/sonar bench-2x 10      # 2x time disadvantage
+rustup target add wasm32-unknown-unknown
+./scripts/build-wasm.sh          # wasm → web/engine.wasm
+node scripts/test-web.mjs        # WASM E2E (needs Node ≥ 18)
 
-# Microbenchmarks
-cargo bench --bench core_bench
-
-# Tests (83 tests)
-cargo test --release
+./sonar-forge.sh                 # everything above in one command
 ```
 
-### Benchmark source code
+The default build is **portable** (no `target-cpu=native` — removed in
+0.2.0). For a single-machine maximum build:
+`RUSTFLAGS="-C target-cpu=native" cargo build --release`.
 
-The benchmark code lives in:
+A `release-checked` profile (overflow checks + unwinding) is provided for
+auditing and fuzzing: `cargo test --release-checked`.
 
-- `src/benchmark.rs` — self-play benchmark framework (multi-threaded)
-- `src/reference_bots.rs` — published-algorithm opponents
-- `src/external.rs` — Python-engine adapter
-- `src/bin/sonar.rs::run_benchmark_*` — CLI benchmark entry points
-- `benches/core_bench.rs` — criterion micro-benchmarks
+## What changed from 0.1.0
 
-#### `run_benchmark` (self-play)
+**Removed**
 
-```rust
-pub fn run_benchmark(
-    cfg: &BenchmarkConfig,
-    p1_kind: BotKind,
-    p2_kind: BotKind,
-) -> (PlayerStats, PlayerStats, Duration) {
-    let stats1 = Arc::new(AtomicStats::new());
-    let stats2 = Arc::new(AtomicStats::new());
-    let start = Instant::now();
+* The entire Python UI (`python/`) — the web app replaces it and runs
+  everywhere with zero install.
+* The external Python engine adapter (`bench-ext`) — benchmark opponents
+  are now built-in reference bots.
+* The "micro-learning" decision bias — adversarial-robustness contract
+  (records are passive statistics).
+* Nightly Rust requirement (`#![feature(test)]`) and the non-portable
+  `target-cpu=native` default build.
 
-    let total_games = cfg.games;
-    let threads = cfg.threads.max(1) as usize;
-    let games_per_thread = (total_games as usize + threads - 1) / threads;
+**Fixed**
 
-    let mut handles = Vec::new();
-    for _ in 0..threads {
-        let s1 = stats1.clone();
-        let s2 = stats2.clone();
-        let seed = crate::rng::random_u64();
-        let gpt = games_per_thread as u32;
-        let mh = cfg.max_hypotheses;
-        let sp = cfg.smart_placement;
-        handles.push(std::thread::spawn(move || {
-            let mut rng = Xoshiro256::from_seed(seed);
-            let mut games_done = 0u32;
-            while games_done < gpt {
-                games_done += 1;
-                let mut p1 = make_bot(p1_kind, "P1", mh);
-                let mut p2 = make_bot(p2_kind, "P2", mh);
-                if sp {
-                    *p1.board_mut() = place_best_fleet(&mut rng, &PlacementConfig::default());
-                    *p2.board_mut() = place_best_fleet(&mut rng, &PlacementConfig::default());
-                }
-                let mut g = Game::new(p1, p2);
-                let winner = g.play(Deadline::none());
-                // ... record stats ...
-            }
-        }));
-    }
-    for h in handles { let _ = h.join(); }
-    // ...
-}
-```
+* `hypothesis_count()` / `probability_matrix()` were stubs returning
+  zeros — now real data via `TargetingStrategy::stats`.
+* The hypothesis filter never regenerated on the first move of a game
+  (`0 >= 1` comparison bug).
+* Sunk-ship length was lost on the wire (`receive_shot` reply) — now an
+  additive `len` field.
+* `best_fleet` panics replaced with a deterministic fallback.
+* Placement fingerprint: border cells 0.000 occupancy → ε-band mixed
+  strategy (measured in `tests/placement_statistics.rs`).
 
-#### `run_benchmark_2x` (Sonar at half the opponent's time)
+**Added**
 
-```rust
-fn run_benchmark_2x(games: u32) {
-    let sonar_secs: u64 = 5;
-    let opp_secs: u64 = sonar_secs * 2;
+* The blended hybrid scoring (`n/(n+K)`) with measured calibration.
+* Cargo workspace (`sonar-core` + `sonar-wasm`), 122-test suite, Wilson-CI
+  benchmarking, hostile-input batteries, determinism guarantees.
+* The full web app: play, team mode, modding with arena, in-browser test
+  suite, docs with client-side search. Deployable to GitHub Pages from
+  the repo as-is.
+* CI (test/clippy/fmt/wasm/web gates) and the Pages deploy workflow.
+* The stability contract (`STABILITY.md`) and reproducible benchmark
+  reports (`BENCHMARKS.md`).
 
-    for (name, kind) in opponents {
-        let mut wins = 0u32;
-        for i in 0..games {
-            let mut our = BotPlayer::new("Sonar", 8, true)
-                .without_learning()
-                .with_deadline(Deadline::from_secs(sonar_secs));
-            let mut opp = make_reference(kind, name);
-            our.place_fleet();
-            // ... place opp fleet ...
+## Roadmap to 1.0
 
-            let dl_sonar = Deadline::from_secs(sonar_secs);
-            let dl_opp = Deadline::from_secs(opp_secs);
-            let mut g = Game::new(Box::new(our), Box::new(opp));
-            let winner = play_with_asymmetric_deadlines(&mut g, dl_sonar, dl_opp);
-            if winner == 1 { wins += 1; }
-        }
-    }
-}
+Milestone-driven; each ships only with its tests green.
 
-fn play_with_asymmetric_deadlines(g: &mut Game, dl1: Deadline, dl2: Deadline) -> u8 {
-    for _ in 0..200 {
-        let (r, c) = g.p1.choose_move(dl1);
-        let res = g.p2.board_mut().shoot(r, c);
-        g.p1.observe_result(r, c, res);
-        if g.p2.is_defeated() { return 1; }
-        let (r, c) = g.p2.choose_move(dl2);
-        let res = g.p1.board_mut().shoot(r, c);
-        g.p2.observe_result(r, c, res);
-        if g.p1.is_defeated() { return 2; }
-    }
-    if g.moves_p1 <= g.moves_p2 { 1 } else { 2 }
-}
-```
+* **0.3** — exact-CENSUS endgame solver (submarine-perfect play in the
+  last 1–2 ships), SPRT-driven strength ladders, seed-verified release
+  numbers.
+* **0.4** — generalised boards (5×5 up to 30×30, tiered bitboards),
+  polyomino ships, torus/holes rule variants, feasibility solver.
+* **0.5** — multi-ISA SIMD kernels (AVX2/AVX-512/NEON/wasm128 with runtime
+  dispatch + differential testing), adversarial red-team harness
+  (out-of-tree, never shipped), exploitability tracking file.
+* **1.0** — API freeze; the beta contract becomes the 1.0 contract.
 
----
+## License
 
-*Apache-2.0 · Sonar v0.1.0 (experimental) · the world's strongest battleship AI engine*
+Apache-2.0. See [LICENSE](LICENSE).

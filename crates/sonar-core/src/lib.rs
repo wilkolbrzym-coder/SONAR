@@ -90,7 +90,7 @@ pub use board::{Board, Cell, OwnerCell, ShotResult};
 pub use engine::Game;
 pub use fleet::FLEET;
 pub use helpers::{cell_index, cell_rc, is_valid_cell, parse_coordinate};
-pub use learning::{LearningDB, GameRecord};
+pub use learning::{GameRecord, LearningDB};
 pub use player::{BotPlayer, HumanPlayer, PdfBot, Player, RandomBot};
 pub use rng::Xoshiro256;
 pub use rules::{ContactRule, GameRules, SunkRule};

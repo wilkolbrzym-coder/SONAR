@@ -16,10 +16,11 @@ use serde::{Deserialize, Serialize};
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Rule for how ships may be placed relative to each other.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ContactRule {
     /// Ships may not touch at all — neither orthogonally nor diagonally.
     /// This is the standard Battleship rule.
+    #[default]
     NoContact,
     /// Ships may touch diagonally (corner-to-corner) but not
     /// orthogonally (side-to-side).
@@ -28,32 +29,21 @@ pub enum ContactRule {
     AllowContact,
 }
 
-impl Default for ContactRule {
-    fn default() -> Self {
-        Self::NoContact
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // SunkRule
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Rule for what happens when a ship is sunk.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SunkRule {
     /// When a ship sinks, all 8-neighbour cells are automatically marked
     /// as misses. This is the standard Battleship rule and helps the
     /// attacker by eliminating cells around the sunk ship.
+    #[default]
     RevealNeighbors,
     /// When a ship sinks, only the ship's cells are marked as sunk.
     /// No neighbours are revealed.
     NoReveal,
-}
-
-impl Default for SunkRule {
-    fn default() -> Self {
-        Self::RevealNeighbors
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -282,7 +272,11 @@ mod tests {
 
     #[test]
     fn test_contact_rule_serialization() {
-        for rule in [ContactRule::NoContact, ContactRule::AllowCornerContact, ContactRule::AllowContact] {
+        for rule in [
+            ContactRule::NoContact,
+            ContactRule::AllowCornerContact,
+            ContactRule::AllowContact,
+        ] {
             let json = serde_json::to_string(&rule).unwrap();
             let back: ContactRule = serde_json::from_str(&json).unwrap();
             assert_eq!(rule, back);

@@ -9,7 +9,7 @@
 //! Configs use `Deadline::none()` — strength here is the *algorithm* under
 //! a fixed hypothesis budget, independent of machine speed.
 
-use sonar::benchmark::{run_benchmark, BenchmarkConfig, BotKind};
+use sonar::benchmark::{BenchmarkConfig, BotKind, run_benchmark};
 
 fn config(games: u32, seed: u64, soft: usize) -> BenchmarkConfig {
     BenchmarkConfig {
@@ -54,9 +54,9 @@ fn test_pdf_dominates_random() {
 #[test]
 fn test_sonar_beats_reference_bots() {
     use sonar::game::Game;
+    use sonar::placement::{PlacementConfig, place_best_fleet};
     use sonar::player::{BotPlayer, Player};
-    use sonar::placement::{place_best_fleet, PlacementConfig};
-    use sonar::reference_bots::{make_reference, ReferenceKind};
+    use sonar::reference_bots::{ReferenceKind, make_reference};
     use sonar::time_limit::Deadline;
 
     // Sonar (hypothesis filter) must beat the published HuntTarget
@@ -71,7 +71,8 @@ fn test_sonar_beats_reference_bots() {
         our.reseed((i as u64) * 31 + 5);
         opp.reseed((i as u64) * 17 + 9);
         our.place_fleet();
-        let mut rng_for_opp = sonar::rng::Xoshiro256::from_seed((i as u64).wrapping_mul(0xDEAD).wrapping_add(7));
+        let mut rng_for_opp =
+            sonar::rng::Xoshiro256::from_seed((i as u64).wrapping_mul(0xDEAD).wrapping_add(7));
         *opp.board_mut() = place_best_fleet(&mut rng_for_opp, &PlacementConfig::default());
 
         let mut g = Game::new(Box::new(our), Box::new(opp));
@@ -118,7 +119,7 @@ fn test_hybrid_never_worse_than_pdf_at_low_budget() {
     // At a small hypothesis budget the adaptive blend (w = n/(n+K)) must
     // fall back toward the PDF, so the hybrid must never be *worse* than
     // PDF alone. Measured: 54% at soft target 128.
-    let cfg = config(100, 0x81EED_0DF, 128);
+    let cfg = config(100, 0x081E_D000_0000_00DF, 128);
     let (s1, _s2, _) = run_benchmark(&cfg, BotKind::Hybrid, BotKind::Pdf);
     assert!(
         s1.win_rate() >= 50.0,
@@ -134,8 +135,8 @@ fn test_smart_placement_is_not_a_liability() {
     // never be a *net negative* (a penalty bug would show up exactly
     // here). Gate: point estimate ≥ 45% over 60 games.
     use sonar::game::Game;
+    use sonar::placement::{PlacementConfig, place_best_fleet, place_random_fleet};
     use sonar::player::{BotPlayer, Player};
-    use sonar::placement::{place_best_fleet, place_random_fleet, PlacementConfig};
     use sonar::rng::Xoshiro256;
     use sonar::time_limit::Deadline;
 

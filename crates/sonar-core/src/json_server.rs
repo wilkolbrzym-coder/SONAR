@@ -135,17 +135,27 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
                 .collect();
             match engine.place_fleet_manual(&parsed) {
                 Ok(()) => serde_json::json!({"ok": true}),
-                Err(i) => serde_json::json!({"ok": false, "error": "illegal placement", "bad_index": i}),
+                Err(i) => {
+                    serde_json::json!({"ok": false, "error": "illegal placement", "bad_index": i})
+                }
             }
         }
         "choose_move" => {
-            let secs = req.extra.get("deadline_secs").and_then(|v| v.as_u64()).unwrap_or(20);
+            let secs = req
+                .extra
+                .get("deadline_secs")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(20);
             let dl = Deadline::from_secs(secs);
             let (r, c) = engine.choose_move(dl);
             serde_json::json!({"row": r, "col": c})
         }
         "suggest_move" => {
-            let secs = req.extra.get("deadline_secs").and_then(|v| v.as_u64()).unwrap_or(20);
+            let secs = req
+                .extra
+                .get("deadline_secs")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(20);
             let dl = Deadline::from_secs(secs);
             let s: MoveSuggestion = engine.suggest_move(dl);
             serde_json::to_value(&s).unwrap_or_else(|_| serde_json::json!({"ok": false}))
@@ -153,7 +163,11 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
         "observe" => {
             let r = req.extra.get("r").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             let c = req.extra.get("c").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let res_str = req.extra.get("result").and_then(|v| v.as_str()).unwrap_or("miss");
+            let res_str = req
+                .extra
+                .get("result")
+                .and_then(|v| v.as_str())
+                .unwrap_or("miss");
             let res = parse_shot_result(res_str);
             engine.observe_result(r, c, res);
             serde_json::json!({"ok": true})
@@ -162,7 +176,14 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
             let r = req.extra.get("r").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             let c = req.extra.get("c").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             let res = engine.receive_shot(r, c);
-            serde_json::json!({"result": format_shot_result(res)})
+            // NOTE: `len` is an additive field (protocol v1 evolution) so
+            // clients can observe "sunk_<len>" precisely. Without it, a
+            // wire-driven game cannot reconstruct sunk ships correctly.
+            let mut v = serde_json::json!({"result": format_shot_result(res)});
+            if let ShotResult::Sunk(len) = res {
+                v["len"] = serde_json::json!(len);
+            }
+            v
         }
         "snapshot" => {
             let snap = engine.snapshot();
@@ -179,15 +200,15 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
             let m = engine.density_matrix();
             serde_json::json!({"matrix": m.to_vec()})
         }
-        "config" => {
-            serde_json::to_value(engine.config()).unwrap_or_else(|_| serde_json::json!({"ok": false}))
-        }
-        "rules" => {
-            serde_json::to_value(engine.rules()).unwrap_or_else(|_| serde_json::json!({"ok": false}))
-        }
+        "config" => serde_json::to_value(engine.config())
+            .unwrap_or_else(|_| serde_json::json!({"ok": false})),
+        "rules" => serde_json::to_value(engine.rules())
+            .unwrap_or_else(|_| serde_json::json!({"ok": false})),
         "set_rules" => {
             if let Some(rules_val) = req.extra.get("rules") {
-                if let Ok(rules) = serde_json::from_value::<crate::rules::GameRules>(rules_val.clone()) {
+                if let Ok(rules) =
+                    serde_json::from_value::<crate::rules::GameRules>(rules_val.clone())
+                {
                     *engine.rules_mut() = rules;
                     match engine.apply_rules() {
                         Ok(()) => return serde_json::json!({"ok": true}),
@@ -233,7 +254,11 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
             serde_json::json!({"ok": true})
         }
         "record_game" => {
-            let won = req.extra.get("won").and_then(|v| v.as_bool()).unwrap_or(false);
+            let won = req
+                .extra
+                .get("won")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             engine.record_game(won);
             serde_json::json!({"ok": true})
         }
@@ -255,13 +280,22 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
             }
         }
         "bench" => {
-            let games = req.extra.get("games").and_then(|v| v.as_u64()).unwrap_or(20).min(10_000) as u32;
+            let games = req
+                .extra
+                .get("games")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(20)
+                .min(10_000) as u32;
             let opponent = req
                 .extra
                 .get("opponent")
                 .and_then(|v| v.as_str())
                 .unwrap_or("random");
-            let seed = req.extra.get("seed").and_then(|v| v.as_u64()).unwrap_or(0x5EED_0000_0000_0001);
+            let seed = req
+                .extra
+                .get("seed")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x5EED_0000_0000_0001);
             let soft = req
                 .extra
                 .get("soft_target")
@@ -273,7 +307,7 @@ pub fn handle_request(engine: &mut Engine, req: &Request) -> Value {
                 "self" | "hybrid" => crate::benchmark::BotKind::Hybrid,
                 other => {
                     return serde_json::json!({"ok": false,
-                        "error": format!("unknown opponent '{}'", other)})
+                        "error": format!("unknown opponent '{}'", other)});
                 }
             };
             let cfg = crate::benchmark::BenchmarkConfig {
@@ -474,7 +508,10 @@ mod tests {
             use_learning: false,
             ..Default::default()
         });
-        let v = handle_line(&mut e, r#"{"cmd":"bench","games":4,"opponent":"random","seed":123}"#);
+        let v = handle_line(
+            &mut e,
+            r#"{"cmd":"bench","games":4,"opponent":"random","seed":123}"#,
+        );
         assert_eq!(v["ok"], true);
         assert_eq!(v["games"], 4);
     }

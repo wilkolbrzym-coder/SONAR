@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sonar — Battleship AI Engine</title>
+  <meta name="description" content="Sonar: the world's strongest battleship AI engine. Play it, mod it, test it — 100% in your browser. Pure Rust + WebAssembly." />
+  <meta name="theme-color" content="#0b1622" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" class="logo" aria-hidden="true">
+        <circle cx="12" cy="12" r="2.4" class="logo-dot"/>
+        <circle cx="12" cy="12" r="6.5" class="ring r1"/>
+        <circle cx="12" cy="12" r="10" class="ring r2"/>
+      </svg>
+      <span class="brand-name">SONAR</span>
+      <span class="brand-version" id="brandVersion">0.2.0-beta.1</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-tab="play" role="tab">Play</button>
+      <button class="tab" data-tab="team" role="tab">Team</button>
+      <button class="tab" data-tab="mods" role="tab">Mods</button>
+      <button class="tab" data-tab="test" role="tab">Test</button>
+      <button class="tab" data-tab="docs" role="tab">Docs</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ── PLAY ─────────────────────────────────────────────────────────── -->
+    <section id="tab-play" class="panel" hidden>
+      <div class="panel-head">
+        <h1>Play against Sonar</h1>
+        <div class="controls">
+          <label>Difficulty
+            <select id="playDifficulty">
+              <option value="16">Ensign (16 hypotheses)</option>
+              <option value="64">Lieutenant (64)</option>
+              <option value="256" selected>Commander (256)</option>
+              <option value="1024">Captain (1024)</option>
+              <option value="4096">Admiral (4096)</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="playHeatmap" /> Sonar heatmap</label>
+          <button id="btnNewGame" class="primary">New game</button>
+        </div>
+      </div>
+
+      <div id="playSetup" class="setup">
+        <h2>Place your fleet</h2>
+        <div class="setup-flex">
+          <div class="ship-palette" id="shipPalette">
+            <div class="palette-hint">Pick a ship, click the grid, <b>R</b> / Rotate to flip</div>
+            <button class="ship-chip" data-len="5"><span class="ship-icon h" style="--len:5"></span>Carrier · 5</button>
+            <button class="ship-chip" data-len="4"><span class="ship-icon h" style="--len:4"></span>Battleship · 4</button>
+            <button class="ship-chip" data-len="3"><span class="ship-icon h" style="--len:3"></span>Submarine · 3</button>
+            <button class="ship-chip" data-len="3"><span class="ship-icon h" style="--len:3"></span>Cruiser · 3</button>
+            <button class="ship-chip" data-len="2"><span class="ship-icon h" style="--len:2"></span>Destroyer · 2</button>
+            <button id="btnRotate" class="ghost">↻ Rotate <kbd>R</kbd></button>
+            <button id="btnAutoPlace" class="ghost">Auto-place</button>
+            <button id="btnRandomPlace" class="ghost">Random</button>
+            <button id="btnClearFleet" class="ghost">Clear</button>
+          </div>
+          <div class="board-wrap">
+            <div class="board-label">Your board — place ships here</div>
+            <div class="board" id="boardMy"></div>
+          </div>
+        </div>
+        <div class="setup-actions">
+          <button id="btnStartGame" class="primary" disabled>Start battle</button>
+          <span id="setupStatus" class="muted"></span>
+        </div>
+      </div>
+
+      <div id="playGame" class="game" hidden>
+        <div class="boards">
+          <div class="board-wrap">
+            <div class="board-label">Enemy waters — fire here <span class="turn-marker" id="turnMarker"></span></div>
+            <div class="board attack" id="boardEnemy"></div>
+          </div>
+          <div class="board-wrap">
+            <div class="board-label">Your fleet</div>
+            <div class="board" id="boardMyGame"></div>
+          </div>
+        </div>
+        <aside class="sidebar">
+          <h2 id="gameStatus">Your move</h2>
+          <div id="sonarInfo" class="sonar-info"></div>
+          <h2>Move log</h2>
+          <ol id="moveLog" class="move-log"></ol>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ── TEAM ─────────────────────────────────────────────────────────── -->
+    <section id="tab-team" class="panel" hidden>
+      <div class="panel-head">
+        <h1>Team mode — Sonar as your advisor</h1>
+        <div class="controls">
+          <label>Advisor strength
+            <select id="teamDifficulty">
+              <option value="256" selected>Commander (256)</option>
+              <option value="1024">Captain (1024)</option>
+              <option value="4096">Admiral (4096)</option>
+            </select>
+          </label>
+          <button id="btnTeamNew" class="primary">New session</button>
+        </div>
+      </div>
+      <p class="muted wide">
+        Playing a real-world (paper) opponent? Fire your shot in the real game, then enter the
+        result here. Sonar tracks the enemy board and suggests the next shot with its full
+        analysis. Your fleet is not needed — this is advisor-only.
+      </p>
+      <div class="team-grid">
+        <div class="board-wrap">
+          <div class="board-label">Enemy waters (as you observed them)</div>
+          <div class="board attack" id="boardTeam"></div>
+          <div class="team-controls">
+            <button data-result="miss" class="result-btn miss">Miss</button>
+            <button data-result="hit" class="result-btn hit">Hit</button>
+            <button data-result="sunk" class="result-btn sunk">Sunk</button>
+            <label class="inline">len <input id="teamSunkLen" type="number" min="2" max="5" value="2" style="width:3.5em"/></label>
+          </div>
+        </div>
+        <aside class="sidebar">
+          <h2>Sonar suggests</h2>
+          <div class="suggest-box" id="teamSuggest">Press “New session”.</div>
+          <h2>Reasoning</h2>
+          <div id="teamInfo" class="sonar-info"></div>
+          <h2>Shot history</h2>
+          <ol id="teamLog" class="move-log"></ol>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ── MODS ─────────────────────────────────────────────────────────── -->
+    <section id="tab-mods" class="panel" hidden>
+      <div class="panel-head">
+        <h1>Mods — write your own Sonar brain</h1>
+        <div class="controls">
+          <label>Examples
+            <select id="modExamples">
+              <option value="">— pick a template —</option>
+            </select>
+          </label>
+          <label>vs difficulty
+            <select id="modDifficulty">
+              <option value="16">Ensign (16)</option>
+              <option value="64" selected>Lieutenant (64)</option>
+              <option value="256">Commander (256)</option>
+              <option value="1024">Captain (1024)</option>
+            </select>
+          </label>
+          <label>games <input id="modGames" type="number" min="1" max="200" value="20" style="width:4em"/></label>
+          <button id="btnRunMod" class="primary">Run arena</button>
+        </div>
+      </div>
+      <p class="muted wide">
+        A mod is a JavaScript object with <code>chooseMove(api)</code> (required) and optional
+        <code>placeFleet</code>, <code>onObserve</code>, <code>onGameEnd</code>. The
+        <code>api</code> exposes 100% of Sonar's internal state — the full board view, the PDF
+        density matrix and the Bayesian posterior. See <b>Docs → Modding</b> for the complete API.
+        Illegal moves are auto-corrected and counted; three strikes forfeit a game.
+      </p>
+      <div class="mods-grid">
+        <div class="editor-wrap">
+          <div class="board-label">mod source (JavaScript)</div>
+          <textarea id="modEditor" spellcheck="false" placeholder="const mod = {
+  name: 'My Mod',
+  chooseMove(api) {
+    const i = api.argmax(api.density);
+    return { r: Math.floor(i / 10), c: i % 10 };
+  },
+};"></textarea>
+        </div>
+        <aside class="sidebar">
+          <h2>Arena results</h2>
+          <div id="modReport" class="mod-report">Load a template or write your own, then “Run arena”.</div>
+          <div class="progress-bar" id="modProgress" hidden><div></div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ── TEST ─────────────────────────────────────────────────────────── -->
+    <section id="tab-test" class="panel" hidden>
+      <div class="panel-head">
+        <h1>Test Sonar — live verification</h1>
+        <div class="controls">
+          <button id="btnRunTests" class="primary">Run test suite</button>
+        </div>
+      </div>
+      <p class="muted wide">
+        These are the same checks the project runs in CI, executed right now against the
+        WebAssembly engine in your browser: protocol contract, determinism, full self-play
+        invariants, statistical strength gates, hostile-input robustness, and the mod runtime.
+      </p>
+      <div id="testResults" class="test-results">
+        <div class="test-placeholder">Press “Run test suite”.</div>
+      </div>
+      <div class="progress-bar" id="testProgress" hidden><div></div></div>
+    </section>
+
+    <!-- ── DOCS ─────────────────────────────────────────────────────────── -->
+    <section id="tab-docs" class="panel" hidden>
+      <div class="panel-head">
+        <h1>Documentation</h1>
+        <div class="controls searchbox">
+          <input id="docSearch" type="search" placeholder="Search the docs…  (e.g. “probability”, “wasm”, “wilson”)" autocomplete="off"/>
+        </div>
+      </div>
+      <nav class="doc-nav" id="docNav"></nav>
+      <article class="doc-body" id="docBody"></article>
+      <div id="docSearchResults" hidden></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Sonar <span id="footerVersion">0.2.0-beta.1</span> — pure Rust + WebAssembly, Apache-2.0.</span>
+    <span class="footer-links">
+      <a href="https://github.com/wilkolbrzym-coder/SONAR" target="_blank" rel="noopener">GitHub</a>
+      · <span id="engineState">engine: loading…</span>
+    </span>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

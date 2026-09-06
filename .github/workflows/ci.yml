@@ -1,0 +1,65 @@
+# CI — build, lint, test on every push/PR. The full release gate.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Rust tests (stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (release)
+        run: cargo build --release
+      - name: Clippy (zero warnings)
+        run: cargo clippy --release --all-targets -- -D warnings
+      - name: Rustfmt check
+        run: cargo fmt --all -- --check
+      - name: Test suite (release, 122 tests)
+        run: cargo test --release
+      - name: Test suite with overflow checks (release-checked)
+        run: cargo test --release-checked
+
+  wasm:
+    name: WebAssembly + web verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build wasm
+        run: ./scripts/build-wasm.sh
+      - name: Web engine E2E (Node)
+        run: node scripts/test-web.mjs
+      - name: Web test suite (Node — same suite as the browser)
+        run: node scripts/test-suite.mjs
+      - name: Mod runtime (Node)
+        run: node scripts/test-mods.mjs
+
+  forge:
+    name: sonar-forge end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run the actual bootstrap script
+        run: ./sonar-forge.sh --quick

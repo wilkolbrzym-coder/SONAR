@@ -162,12 +162,15 @@ pub fn random_range(n: u64) -> u64 {
 }
 
 /// A detached generator (e.g. one per benchmark thread).
+///
+/// On WASM there is no process id — a fixed salt is used instead (the
+/// underlying entropy already differs per call via the global counter).
 pub fn thread_rng() -> Xoshiro256 {
-    Xoshiro256::from_seed(
-        random_u64()
-            .wrapping_mul(0x100000001B3)
-            .wrapping_add(std::process::id() as u64),
-    )
+    #[cfg(not(target_arch = "wasm32"))]
+    let salt = std::process::id() as u64;
+    #[cfg(target_arch = "wasm32")]
+    let salt = 0x5A17_0000_0000_0001u64;
+    Xoshiro256::from_seed(random_u64().wrapping_mul(0x100000001B3).wrapping_add(salt))
 }
 
 #[cfg(test)]

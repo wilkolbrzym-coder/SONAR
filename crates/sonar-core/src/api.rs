@@ -26,7 +26,7 @@
 
 use crate::board::{Board, ShotResult};
 use crate::learning::{self, GameRecord, LearningDB};
-use crate::placement::{place_best_fleet, place_random_fleet, PlacementConfig};
+use crate::placement::{PlacementConfig, place_best_fleet, place_random_fleet};
 use crate::rng::Xoshiro256;
 use crate::rules::GameRules;
 use crate::targeting::{EnemyView, HybridTargeting, TargetingStrategy};
@@ -206,9 +206,8 @@ impl Engine {
     pub fn apply_config(&mut self) {
         // We can't mutate the boxed strategy directly without downcasting;
         // the simplest correct behaviour is to rebuild it.
-        self.strategy = Box::new(
-            HybridTargeting::new().with_soft_target(self.config.hypothesis_soft_target),
-        );
+        self.strategy =
+            Box::new(HybridTargeting::new().with_soft_target(self.config.hypothesis_soft_target));
     }
 
     /// Borrow the current game rules.
@@ -249,10 +248,7 @@ impl Engine {
     /// Place our fleet manually. `ships` is a list of `(row, col, length,
     /// horizontal)`. Returns `Err` with the index of the offending ship
     /// if any placement is illegal.
-    pub fn place_fleet_manual(
-        &mut self,
-        ships: &[(usize, usize, u8, bool)],
-    ) -> Result<(), usize> {
+    pub fn place_fleet_manual(&mut self, ships: &[(usize, usize, u8, bool)]) -> Result<(), usize> {
         self.our_board.clear();
         for (i, &(r, c, len, h)) in ships.iter().enumerate() {
             match crate::board::Ship::new(r, c, len, h) {
@@ -313,7 +309,11 @@ impl Engine {
             .filter(|(i, _)| *i != r * 10 + c)
             .map(|(_, &v)| v)
             .fold(0.0f32, f32::max);
-        let confidence = if top > 0.0 { (top - runner_up).clamp(0.0, 1.0) } else { 0.0 };
+        let confidence = if top > 0.0 {
+            (top - runner_up).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
 
         MoveSuggestion {
             row: r,
@@ -509,11 +509,20 @@ mod tests {
         e.reseed(99);
         e.place_fleet_smart();
         let _ = e.choose_move(Deadline::none());
-        assert!(e.hypothesis_count() > 0, "hypothesis_count must report real data");
+        assert!(
+            e.hypothesis_count() > 0,
+            "hypothesis_count must report real data"
+        );
         let prob = e.probability_matrix();
-        assert!(prob.iter().any(|&p| p > 0.0), "probability matrix must be non-zero");
+        assert!(
+            prob.iter().any(|&p| p > 0.0),
+            "probability matrix must be non-zero"
+        );
         let snap = e.snapshot();
-        assert!(snap.probability_matrix.is_some(), "snapshot must include the probability matrix");
+        assert!(
+            snap.probability_matrix.is_some(),
+            "snapshot must include the probability matrix"
+        );
     }
 
     #[test]
@@ -540,10 +549,7 @@ mod tests {
             ..Default::default()
         });
         // Two ships touching.
-        let ships = vec![
-            (0, 0, 3, true),
-            (1, 0, 3, true),
-        ];
+        let ships = vec![(0, 0, 3, true), (1, 0, 3, true)];
         assert!(e.place_fleet_manual(&ships).is_err());
     }
 
@@ -555,7 +561,9 @@ mod tests {
             ..Default::default()
         });
         e.place_fleet_smart();
-        let s = e.suggest_move(Deadline::from_duration(std::time::Duration::from_millis(200)));
+        let s = e.suggest_move(Deadline::from_duration(std::time::Duration::from_millis(
+            200,
+        )));
         assert!(s.row < 10);
         assert!(s.col < 10);
         assert!(!s.coordinate.is_empty());
@@ -582,7 +590,9 @@ mod tests {
             ..Default::default()
         });
         e.place_fleet_smart();
-        e.choose_move(Deadline::from_duration(std::time::Duration::from_millis(10)));
+        e.choose_move(Deadline::from_duration(std::time::Duration::from_millis(
+            10,
+        )));
         e.reset();
         assert_eq!(e.our_board().ship_list.len(), 0);
     }

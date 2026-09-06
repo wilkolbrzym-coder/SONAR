@@ -4,28 +4,34 @@
 //! implements a classic algorithm from the literature / open source:
 //!
 //! 1. `HuntTargetBot` — the classic hunt+target pattern (textbook baseline)
-//! 2. `BurnsPdfBot` — PDF density per Ethan Burns (Dartmouth battleship research)
-//! 3. `MonteCarloBot` — Monte Carlo sampling (à la mitchelljy/battleships_ai)
+//!    2. `BurnsPdfBot` — PDF density per Ethan Burns (Dartmouth research)
+//!    3. `MonteCarloBot` — Monte Carlo sampling (à la mitchelljy/battleships_ai)
 
 use crate::board::{Board, ShotResult};
-use crate::placement::{place_random_fleet, PlacementConfig};
-use crate::rng::Xoshiro256;
-use crate::targeting::{placements, EnemyView, TargetingStrategy};
-use crate::time_limit::Deadline;
+use crate::placement::{PlacementConfig, place_random_fleet};
 use crate::player::Player;
+use crate::rng::Xoshiro256;
+use crate::targeting::{EnemyView, TargetingStrategy, placements};
+use crate::time_limit::Deadline;
 
-/// ============================================================
-/// 1. HuntTargetBot — the classic hunt+target strategy (simplest).
-/// ============================================================
-/// Strategy:
-/// - Hunt mode: fire at every other cell (checkerboard) until a hit.
-/// - Target mode: after a hit, fire at the 4 neighbours.
-/// - After a sink, return to hunt mode.
+// ============================================================
+// 1. HuntTargetBot — the classic hunt+target strategy (simplest).
+// ============================================================
+// Strategy:
+// - Hunt mode: fire at every other cell (checkerboard) until a hit.
+// - Target mode: after a hit, fire at the 4 neighbours.
+// - After a sink, return to hunt mode.
 pub struct HuntTargetBot {
     pub view: EnemyView,
     pub rng: Xoshiro256,
     pub last_hits: Vec<(usize, usize)>,
     pub hunt_parity: bool,
+}
+
+impl Default for HuntTargetBot {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HuntTargetBot {
@@ -43,10 +49,10 @@ impl HuntTargetBot {
         let un = self.view.unknown();
         let mut best: Option<(usize, usize)> = None;
         for (r, c) in un.iter_cells() {
-            if !self.hunt_parity || (r + c) % 2 == 0 {
-                if best.is_none() || self.rng.next_u64() & 3 == 0 {
-                    best = Some((r, c));
-                }
+            if (!self.hunt_parity || (r + c) % 2 == 0)
+                && (best.is_none() || self.rng.next_u64() & 3 == 0)
+            {
+                best = Some((r, c));
             }
         }
         best.unwrap_or_else(|| {
@@ -73,7 +79,12 @@ impl HuntTargetBot {
 }
 
 impl TargetingStrategy for HuntTargetBot {
-    fn choose(&mut self, view: &EnemyView, _rng: &mut Xoshiro256, _deadline: Deadline) -> (usize, usize) {
+    fn choose(
+        &mut self,
+        view: &EnemyView,
+        _rng: &mut Xoshiro256,
+        _deadline: Deadline,
+    ) -> (usize, usize) {
         self.view = view.clone();
         if let Some(mv) = self.choose_target() {
             return mv;
@@ -97,6 +108,12 @@ pub struct BurnsPdfBot {
     pub rng: Xoshiro256,
 }
 
+impl Default for BurnsPdfBot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BurnsPdfBot {
     pub fn new() -> Self {
         Self {
@@ -107,7 +124,12 @@ impl BurnsPdfBot {
 }
 
 impl TargetingStrategy for BurnsPdfBot {
-    fn choose(&mut self, view: &EnemyView, rng: &mut Xoshiro256, _deadline: Deadline) -> (usize, usize) {
+    fn choose(
+        &mut self,
+        view: &EnemyView,
+        rng: &mut Xoshiro256,
+        _deadline: Deadline,
+    ) -> (usize, usize) {
         // Classic PDF: density = the number of ship placements through each cell.
         let mut density = [0.0f32; 100];
         let miss = view.miss_mask().0;
@@ -117,12 +139,18 @@ impl TargetingStrategy for BurnsPdfBot {
 
         for &len in &view.remaining {
             let li = len as usize;
-            if li >= placements.len() { continue; }
+            if li >= placements.len() {
+                continue;
+            }
             for &(_, _, _, mask) in &placements[li] {
-                if (mask & known_no) != 0 { continue; }
+                if (mask & known_no) != 0 {
+                    continue;
+                }
                 let has_active = active != 0;
                 let contains = (mask & active) != 0;
-                if has_active && !contains { continue; }
+                if has_active && !contains {
+                    continue;
+                }
                 let w = if contains { 50.0 } else { 1.0 };
                 let mut m = mask;
                 while m != 0 {
@@ -137,7 +165,9 @@ impl TargetingStrategy for BurnsPdfBot {
         let mut best_cells: [usize; 16] = [0; 16];
         let mut best_count = 0usize;
         for (i, &v) in density.iter().enumerate() {
-            if (view.shots.0 & (1u128 << i)) != 0 { continue; }
+            if (view.shots.0 & (1u128 << i)) != 0 {
+                continue;
+            }
             if v > best_val {
                 best_val = v;
                 best_count = 0;
@@ -152,12 +182,18 @@ impl TargetingStrategy for BurnsPdfBot {
             let cells: Vec<_> = view.unknown().iter_cells().collect();
             return cells[rng.gen_range(cells.len() as u64) as usize];
         }
-        let pick = if best_count == 1 { 0 } else { rng.gen_range(best_count as u64) as usize };
+        let pick = if best_count == 1 {
+            0
+        } else {
+            rng.gen_range(best_count as u64) as usize
+        };
         let i = best_cells[pick];
         (i / 10, i % 10)
     }
     fn observe(&mut self, _r: usize, _c: usize, _result: ShotResult) {}
-    fn reset(&mut self) { self.view = EnemyView::new(); }
+    fn reset(&mut self) {
+        self.view = EnemyView::new();
+    }
 }
 
 /// ============================================================
@@ -184,7 +220,12 @@ impl MonteCarloBot {
 }
 
 impl TargetingStrategy for MonteCarloBot {
-    fn choose(&mut self, view: &EnemyView, rng: &mut Xoshiro256, deadline: Deadline) -> (usize, usize) {
+    fn choose(
+        &mut self,
+        view: &EnemyView,
+        rng: &mut Xoshiro256,
+        deadline: Deadline,
+    ) -> (usize, usize) {
         use crate::placement::random_fleet;
         let miss = view.miss_mask().0;
         let hits = view.hits.0;
@@ -196,25 +237,45 @@ impl TargetingStrategy for MonteCarloBot {
         let mut attempts = 0u32;
         while (total as usize) < self.samples && attempts < self.samples as u32 * 10 {
             attempts += 1;
-            if deadline.check_expired(attempts) { break; }
+            if deadline.check_expired(attempts) {
+                break;
+            }
             if let Some(cfg) = random_fleet(rng) {
-                if (cfg.mask & known_no) != 0 { continue; }
-                if (active & !cfg.mask) != 0 { continue; }
-                if (hits & !cfg.mask) != 0 { continue; }
+                if (cfg.mask & known_no) != 0 {
+                    continue;
+                }
+                if (active & !cfg.mask) != 0 {
+                    continue;
+                }
+                if (hits & !cfg.mask) != 0 {
+                    continue;
+                }
                 // Length-subset check.
                 let mut fleet_lens: Vec<u8> = cfg.ships.iter().map(|s| s.len).collect();
                 fleet_lens.sort();
                 let mut remaining = view.remaining.clone();
                 remaining.sort();
                 let mut counts_l = [0i8; 8];
-                for &v in &fleet_lens { if (v as usize) < 8 { counts_l[v as usize] += 1; } }
+                for &v in &fleet_lens {
+                    if (v as usize) < 8 {
+                        counts_l[v as usize] += 1;
+                    }
+                }
                 let mut ok = true;
                 for &v in &remaining {
-                    if (v as usize) >= 8 { ok = false; break; }
+                    if (v as usize) >= 8 {
+                        ok = false;
+                        break;
+                    }
                     counts_l[v as usize] -= 1;
-                    if counts_l[v as usize] < 0 { ok = false; break; }
+                    if counts_l[v as usize] < 0 {
+                        ok = false;
+                        break;
+                    }
                 }
-                if !ok { continue; }
+                if !ok {
+                    continue;
+                }
                 let mut m = cfg.mask;
                 while m != 0 {
                     let i = m.trailing_zeros() as usize;
@@ -230,7 +291,9 @@ impl TargetingStrategy for MonteCarloBot {
         let mut best_cells: [usize; 16] = [0; 16];
         let mut best_count = 0usize;
         for (i, &v) in counts.iter().enumerate() {
-            if (view.shots.0 & (1u128 << i)) != 0 { continue; }
+            if (view.shots.0 & (1u128 << i)) != 0 {
+                continue;
+            }
             if v > best_val {
                 best_val = v;
                 best_count = 0;
@@ -244,15 +307,23 @@ impl TargetingStrategy for MonteCarloBot {
         if best_count == 0 || best_val == 0 {
             // Fallback — any unfired cell.
             let cells: Vec<_> = view.unknown().iter_cells().collect();
-            if cells.is_empty() { return (0, 0); }
+            if cells.is_empty() {
+                return (0, 0);
+            }
             return cells[rng.gen_range(cells.len() as u64) as usize];
         }
-        let pick = if best_count == 1 { 0 } else { rng.gen_range(best_count as u64) as usize };
+        let pick = if best_count == 1 {
+            0
+        } else {
+            rng.gen_range(best_count as u64) as usize
+        };
         let i = best_cells[pick];
         (i / 10, i % 10)
     }
     fn observe(&mut self, _r: usize, _c: usize, _result: ShotResult) {}
-    fn reset(&mut self) { self.view = EnemyView::new(); }
+    fn reset(&mut self) {
+        self.view = EnemyView::new();
+    }
 }
 
 /// Wraps a reference bot as a `Player`.
@@ -278,9 +349,15 @@ impl ReferencePlayer {
 }
 
 impl Player for ReferencePlayer {
-    fn name(&self) -> &str { &self.name }
-    fn board(&self) -> &Board { &self.board }
-    fn board_mut(&mut self) -> &mut Board { &mut self.board }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn board(&self) -> &Board {
+        &self.board
+    }
+    fn board_mut(&mut self) -> &mut Board {
+        &mut self.board
+    }
     fn choose_move(&mut self, deadline: Deadline) -> (usize, usize) {
         self.strategy.choose(&self.view, &mut self.rng, deadline)
     }
@@ -332,7 +409,15 @@ mod tests {
         for _ in 0..30 {
             let (r, c) = ht.choose(&v, &mut rng, Deadline::none());
             assert!(!v.shots.test(r, c));
-            v.observe(r, c, if (r + c) % 3 == 0 { ShotResult::Hit } else { ShotResult::Miss });
+            v.observe(
+                r,
+                c,
+                if (r + c) % 3 == 0 {
+                    ShotResult::Hit
+                } else {
+                    ShotResult::Miss
+                },
+            );
         }
     }
 
@@ -344,7 +429,15 @@ mod tests {
         for _ in 0..30 {
             let (r, c) = b.choose(&v, &mut rng, Deadline::none());
             assert!(!v.shots.test(r, c));
-            v.observe(r, c, if (r + c) % 3 == 0 { ShotResult::Hit } else { ShotResult::Miss });
+            v.observe(
+                r,
+                c,
+                if (r + c) % 3 == 0 {
+                    ShotResult::Hit
+                } else {
+                    ShotResult::Miss
+                },
+            );
         }
     }
 
@@ -356,7 +449,15 @@ mod tests {
         for _ in 0..20 {
             let (r, c) = mc.choose(&v, &mut rng, Deadline::none());
             assert!(!v.shots.test(r, c));
-            v.observe(r, c, if (r + c) % 3 == 0 { ShotResult::Hit } else { ShotResult::Miss });
+            v.observe(
+                r,
+                c,
+                if (r + c) % 3 == 0 {
+                    ShotResult::Hit
+                } else {
+                    ShotResult::Miss
+                },
+            );
         }
     }
 }

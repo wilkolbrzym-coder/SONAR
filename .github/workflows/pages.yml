@@ -1,0 +1,60 @@
+# GitHub Pages — build the WASM engine and publish the web app.
+#
+# The web/ directory is plain static files (no build step); the only
+# compiled artifact is web/engine.wasm, rebuilt here on every deploy so
+# the published site always matches the repository state.
+name: Deploy web app to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the WASM engine
+        run: ./scripts/build-wasm.sh
+      - name: Verify the web app (Node)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run web verification
+        run: |
+          node scripts/test-web.mjs
+          node scripts/test-suite.mjs
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r web/* _site/
+          touch _site/.nojekyll
+          ls -la _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

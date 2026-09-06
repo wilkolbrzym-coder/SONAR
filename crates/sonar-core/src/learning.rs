@@ -57,7 +57,10 @@ pub struct LearningDB {
 impl LearningDB {
     /// Create an empty database.
     pub fn new() -> Self {
-        Self { games: Vec::new(), version: 1 }
+        Self {
+            games: Vec::new(),
+            version: 1,
+        }
     }
 
     /// Load from a JSON file. Returns an empty DB if the file does not
@@ -71,8 +74,7 @@ impl LearningDB {
 
     /// Save to a JSON file (pretty-printed).
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        let s = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let s = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)?;

@@ -1,0 +1,17 @@
+{
+  "name": "Sonar — Battleship AI Engine",
+  "short_name": "Sonar",
+  "description": "The world's strongest battleship AI engine. Play it, mod it, test it — 100% in your browser. Pure Rust + WebAssembly.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b1622",
+  "theme_color": "#0b1622",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

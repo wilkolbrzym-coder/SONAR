@@ -124,7 +124,14 @@ pub fn random_fleet(rng: &mut Xoshiro256) -> Option<FleetConfig> {
                 if (board.ships.0 & mask) == 0 && (board.ships.0 & dilated) == 0 {
                     // Place without going through Board::place_ship (faster).
                     board.ships.0 |= mask;
-                    let ship = Ship { r, c, len, horizontal: horiz, mask, sunk: false };
+                    let ship = Ship {
+                        r,
+                        c,
+                        len,
+                        horizontal: horiz,
+                        mask,
+                        sunk: false,
+                    };
                     board.ship_list.push(ship);
                     ships.push(ship);
                     placed = true;
@@ -162,8 +169,10 @@ pub fn fleet_penalty(cfg: &FleetConfig, config: &PlacementConfig) -> f32 {
     }
 
     // 2. Touching the board edge.
-    let edge_mask = BitBoard::row_mask(0) | BitBoard::row_mask(9)
-        | BitBoard::col_mask(0) | BitBoard::col_mask(9);
+    let edge_mask = BitBoard::row_mask(0)
+        | BitBoard::row_mask(9)
+        | BitBoard::col_mask(0)
+        | BitBoard::col_mask(9);
     let edge_count = (ships_mask & edge_mask).count_ones() as f32;
     penalty += edge_count * config.penalty_edge;
 
@@ -254,11 +263,46 @@ pub fn best_fleet(rng: &mut Xoshiro256, config: &PlacementConfig) -> FleetConfig
 fn fallback_fleet() -> FleetConfig {
     // The canonical test fleet: 5 ships along the left edge, no contact.
     let ships: [Ship; 5] = [
-        Ship::new(0, 0, 5, true).unwrap_or(Ship { r: 0, c: 0, len: 5, horizontal: true, mask: 0x1F, sunk: false }),
-        Ship::new(2, 0, 4, true).unwrap_or(Ship { r: 2, c: 0, len: 4, horizontal: true, mask: 0xF << 20, sunk: false }),
-        Ship::new(4, 0, 3, true).unwrap_or(Ship { r: 4, c: 0, len: 3, horizontal: true, mask: 0x7 << 40, sunk: false }),
-        Ship::new(6, 0, 3, true).unwrap_or(Ship { r: 6, c: 0, len: 3, horizontal: true, mask: 0x7 << 60, sunk: false }),
-        Ship::new(8, 0, 2, true).unwrap_or(Ship { r: 8, c: 0, len: 2, horizontal: true, mask: 0x3 << 80, sunk: false }),
+        Ship::new(0, 0, 5, true).unwrap_or(Ship {
+            r: 0,
+            c: 0,
+            len: 5,
+            horizontal: true,
+            mask: 0x1F,
+            sunk: false,
+        }),
+        Ship::new(2, 0, 4, true).unwrap_or(Ship {
+            r: 2,
+            c: 0,
+            len: 4,
+            horizontal: true,
+            mask: 0xF << 20,
+            sunk: false,
+        }),
+        Ship::new(4, 0, 3, true).unwrap_or(Ship {
+            r: 4,
+            c: 0,
+            len: 3,
+            horizontal: true,
+            mask: 0x7 << 40,
+            sunk: false,
+        }),
+        Ship::new(6, 0, 3, true).unwrap_or(Ship {
+            r: 6,
+            c: 0,
+            len: 3,
+            horizontal: true,
+            mask: 0x7 << 60,
+            sunk: false,
+        }),
+        Ship::new(8, 0, 2, true).unwrap_or(Ship {
+            r: 8,
+            c: 0,
+            len: 2,
+            horizontal: true,
+            mask: 0x3 << 80,
+            sunk: false,
+        }),
     ];
     FleetConfig::from_ships(ships)
 }
@@ -308,10 +352,19 @@ mod tests {
                     let di = BitBoard(cfg.ships[i].mask).dilate8().0;
                     let overlap = di & cfg.ships[j].mask;
                     assert_eq!(
-                        overlap, 0,
+                        overlap,
+                        0,
                         "ships {} (r={},c={},len={},h={}) and {} (r={},c={},len={},h={}) touch",
-                        i, cfg.ships[i].r, cfg.ships[i].c, cfg.ships[i].len, cfg.ships[i].horizontal,
-                        j, cfg.ships[j].r, cfg.ships[j].c, cfg.ships[j].len, cfg.ships[j].horizontal,
+                        i,
+                        cfg.ships[i].r,
+                        cfg.ships[i].c,
+                        cfg.ships[i].len,
+                        cfg.ships[i].horizontal,
+                        j,
+                        cfg.ships[j].r,
+                        cfg.ships[j].c,
+                        cfg.ships[j].len,
+                        cfg.ships[j].horizontal,
                     );
                 }
             }
@@ -321,7 +374,10 @@ mod tests {
     #[test]
     fn test_best_fleet_beats_random() {
         let mut rng = Xoshiro256::from_seed(7);
-        let cfg = PlacementConfig { candidates: 256, ..Default::default() };
+        let cfg = PlacementConfig {
+            candidates: 256,
+            ..Default::default()
+        };
         let best = best_fleet(&mut rng, &cfg);
         let best_p = fleet_penalty(&best, &cfg);
         let mut sum = 0.0;

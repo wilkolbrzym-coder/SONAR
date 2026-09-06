@@ -26,7 +26,11 @@ pub fn now_us() -> u64 {
     }
     #[cfg(target_arch = "wasm32")]
     {
-        now_ms_wasm() as u64 * 1_000
+        // SAFETY: calling an imported host function; the JS glue always
+        // provides `sonar_env.now_ms` (see web/engine.js).
+        #[allow(unsafe_code)]
+        let ms = unsafe { now_ms_wasm() };
+        ms as u64 * 1_000
     }
 }
 
@@ -40,7 +44,8 @@ pub fn now_ms() -> u64 {
 /// `sonar_env.now_ms()` (typically `performance.now()`).
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "sonar_env")]
-extern "C" {
+#[allow(unsafe_code)]
+unsafe extern "C" {
     #[link_name = "now_ms"]
     fn now_ms_wasm() -> f64;
 }

@@ -11,7 +11,7 @@
 //! probability distribution becomes.
 
 use crate::board::ShotResult;
-use crate::placement::{random_fleet, FleetConfig};
+use crate::placement::{FleetConfig, random_fleet};
 use crate::rng::Xoshiro256;
 use crate::targeting::{EnemyView, PdfConfig, PdfTargeting, StrategyStats, TargetingStrategy};
 use crate::time_limit::Deadline;
@@ -74,7 +74,9 @@ impl HypothesisFilter {
             if deadline.check_expired(attempts) {
                 break;
             }
-            let Some(cfg) = random_fleet(rng) else { continue };
+            let Some(cfg) = random_fleet(rng) else {
+                continue;
+            };
 
             if is_consistent(&cfg, known_no_ship, active_hits, hits, &remaining) {
                 new_hyps.push(cfg);
@@ -87,12 +89,7 @@ impl HypothesisFilter {
     /// Append more hypotheses to the existing set (for the "keep thinking"
     /// loop). Runs until the deadline expires or `batch_size` new
     /// hypotheses are found.
-    pub fn regenerate_more(
-        &mut self,
-        view: &EnemyView,
-        rng: &mut Xoshiro256,
-        deadline: Deadline,
-    ) {
+    pub fn regenerate_more(&mut self, view: &EnemyView, rng: &mut Xoshiro256, deadline: Deadline) {
         let known_no_ship = view.miss_mask().0 | view.sunk.0;
         let active_hits = view.active_hits().0;
         let hits = view.hits.0;
@@ -110,7 +107,9 @@ impl HypothesisFilter {
             if deadline.check_expired(attempts) {
                 break;
             }
-            let Some(cfg) = random_fleet(rng) else { continue };
+            let Some(cfg) = random_fleet(rng) else {
+                continue;
+            };
             if is_consistent(&cfg, known_no_ship, active_hits, hits, &remaining) {
                 self.hypotheses.push(cfg);
                 found += 1;
@@ -127,7 +126,11 @@ impl HypothesisFilter {
         }
         let bit = 1u128 << (r * 10 + c);
         let n = self.hypotheses.len() as f32;
-        let count = self.hypotheses.iter().filter(|h| (h.mask & bit) != 0).count();
+        let count = self
+            .hypotheses
+            .iter()
+            .filter(|h| (h.mask & bit) != 0)
+            .count();
         count as f32 / n
     }
 
@@ -187,7 +190,11 @@ impl HypothesisFilter {
         if best_count == 0 {
             return self.pdf.choose(view, rng, deadline);
         }
-        let pick = if best_count == 1 { 0 } else { rng.gen_range(best_count as u64) as usize };
+        let pick = if best_count == 1 {
+            0
+        } else {
+            rng.gen_range(best_count as u64) as usize
+        };
         let i = best_cells[pick];
         (i / 10, i % 10)
     }
@@ -340,7 +347,11 @@ impl HybridTargeting {
             // Every cell exhausted — any coordinate is moot.
             return (0, 0);
         }
-        let pick = if best_count == 1 { 0 } else { rng.gen_range(best_count as u64) as usize };
+        let pick = if best_count == 1 {
+            0
+        } else {
+            rng.gen_range(best_count as u64) as usize
+        };
         let i = best_cells[pick];
         (i / 10, i % 10)
     }
@@ -517,10 +528,20 @@ mod tests {
 
         let mut hf = HypothesisFilter::new(usize::MAX);
         // 50 ms deadline — should collect far fewer than usize::MAX hypotheses.
-        hf.regenerate(&v, &mut rng, Deadline::from_duration(std::time::Duration::from_millis(50)));
-        assert!(!hf.hypotheses.is_empty(), "should have collected some hypotheses");
+        hf.regenerate(
+            &v,
+            &mut rng,
+            Deadline::from_duration(std::time::Duration::from_millis(50)),
+        );
+        assert!(
+            !hf.hypotheses.is_empty(),
+            "should have collected some hypotheses"
+        );
         // The key assertion is that we didn't run forever.
-        assert!(hf.hypotheses.len() < 1_000_000, "deadline should have stopped it");
+        assert!(
+            hf.hypotheses.len() < 1_000_000,
+            "deadline should have stopped it"
+        );
     }
 
     #[test]
@@ -532,7 +553,11 @@ mod tests {
         for _ in 0..30 {
             let (r, c) = ht.choose(&v, &mut rng, Deadline::none());
             assert!(!v.shots.test(r, c), "reshoot at ({},{})", r, c);
-            let res = if (r + c) % 3 == 0 { ShotResult::Hit } else { ShotResult::Miss };
+            let res = if (r + c) % 3 == 0 {
+                ShotResult::Hit
+            } else {
+                ShotResult::Miss
+            };
             v.observe(r, c, res);
         }
     }
@@ -570,6 +595,10 @@ mod tests {
         // Every hypothesis covers 17 ship cells and the matrix is
         // normalised per hypothesis, so the total probability mass is ~17.
         let sum: f32 = m.iter().sum();
-        assert!((sum - 17.0).abs() < 0.5, "probability mass should be ~17 cells, got {}", sum);
+        assert!(
+            (sum - 17.0).abs() < 0.5,
+            "probability mass should be ~17 cells, got {}",
+            sum
+        );
     }
 }

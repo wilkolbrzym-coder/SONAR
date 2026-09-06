@@ -7,7 +7,7 @@
 
 use sonar::bitboard::BitBoard;
 use sonar::board::{Ship, ShotResult};
-use sonar::placement::{place_best_fleet, place_random_fleet, random_fleet, PlacementConfig};
+use sonar::placement::{PlacementConfig, place_best_fleet, place_random_fleet, random_fleet};
 use sonar::rng::Xoshiro256;
 use sonar::rules::{ContactRule, GameRules, SunkRule};
 use sonar::targeting::EnemyView;
@@ -35,9 +35,11 @@ fn prop_random_fleets_are_legal() {
             for j in (i + 1)..5 {
                 let dilated = BitBoard(cfg.ships[i].mask).dilate8().0;
                 assert_eq!(
-                    dilated & cfg.ships[j].mask, 0,
+                    dilated & cfg.ships[j].mask,
+                    0,
                     "ships {} and {} touch",
-                    i, j
+                    i,
+                    j
                 );
             }
         }
@@ -50,7 +52,7 @@ fn prop_ship_masks_match_geometry() {
     // NOTE: the *start* coordinate is bounded along the ship's axis
     // (columns for horizontal, rows for vertical); the other axis is
     // free within 0..10.
-    let mut rng = Xoshiro256::from_seed(0x5EED_1);
+    let mut rng = Xoshiro256::from_seed(0x5EED_0001);
     for _ in 0..CASES {
         let len = (rng.next_u64() % 5 + 2) as u8;
         let horizontal = rng.next_u64() & 1 == 0;
@@ -74,7 +76,10 @@ fn prop_ship_masks_match_geometry() {
                 assert_eq!((*rr, *cc), (r + i, c));
             }
             assert!(ship.occupies(*rr, *cc));
-            assert!(BitBoard(ship.mask).test(*rr, *cc), "mask covers geometry cell");
+            assert!(
+                BitBoard(ship.mask).test(*rr, *cc),
+                "mask covers geometry cell"
+            );
         }
     }
 }
@@ -92,7 +97,11 @@ fn prop_board_shoot_is_idempotent() {
         let before = (b.shots, b.hits, b.sunk);
         let second = b.shoot(r, c);
         let after = (b.shots, b.hits, b.sunk);
-        assert_eq!(second, ShotResult::AlreadyShot, "second shot must report AlreadyShot");
+        assert_eq!(
+            second,
+            ShotResult::AlreadyShot,
+            "second shot must report AlreadyShot"
+        );
         assert_eq!(before, after, "second shot must not mutate the board");
         assert_ne!(first, ShotResult::AlreadyShot);
     }
@@ -104,7 +113,7 @@ fn prop_enemy_view_masks_stay_consistent() {
     //   hits ⊆ shots, sunk ⊆ hits, remaining ⊆ original lengths, and the
     //   sunk set is a union of complete linear ships.
     let mut rng = Xoshiro256::from_seed(0xE1E1);
-    let original = vec![2u8, 3, 3, 4, 5];
+    let original = [2u8, 3, 3, 4, 5];
     for _ in 0..CASES {
         let mut v = EnemyView::new();
         let n_obs = (rng.next_u64() % 30) as u32;
@@ -113,7 +122,7 @@ fn prop_enemy_view_masks_stay_consistent() {
             let c = (rng.next_u64() % 10) as usize;
             let pick = rng.next_u64() % 5;
             let res = match pick {
-                0 | 1 | 2 => ShotResult::Miss,
+                0..=2 => ShotResult::Miss,
                 3 => ShotResult::Hit,
                 _ => {
                     // Sunk with a plausible length: prefer one still in
@@ -131,7 +140,10 @@ fn prop_enemy_view_masks_stay_consistent() {
             assert_eq!(v.hits.0 & !v.shots.0, 0, "hits ⊄ shots");
             assert_eq!(v.sunk.0 & !v.hits.0, 0, "sunk ⊄ hits");
             for &len in &v.remaining {
-                assert!(original.contains(&len), "remaining contains an impossible length");
+                assert!(
+                    original.contains(&len),
+                    "remaining contains an impossible length"
+                );
             }
             assert!(v.remaining.len() <= 5);
         }
@@ -178,24 +190,27 @@ fn prop_rules_validation_is_sound() {
         let rules = GameRules {
             board_size,
             ship_lengths,
-            contact_rule: [ContactRule::NoContact, ContactRule::AllowCornerContact, ContactRule::AllowContact]
-                [rng.next_u64() as usize % 3],
+            contact_rule: [
+                ContactRule::NoContact,
+                ContactRule::AllowCornerContact,
+                ContactRule::AllowContact,
+            ][rng.next_u64() as usize % 3],
             sunk_rule: [SunkRule::RevealNeighbors, SunkRule::NoReveal][rng.next_u64() as usize % 2],
         };
         let ok = rules.validate().is_ok();
         // Cross-check the acceptance conditions by hand.
         let lengths_legal = !rules.ship_lengths.is_empty()
             && rules.ship_lengths.len() <= 10
-            && rules.ship_lengths.iter().all(|&l| l >= 1 && l as usize <= rules.board_size);
+            && rules
+                .ship_lengths
+                .iter()
+                .all(|&l| l >= 1 && l as usize <= rules.board_size);
         let total: usize = rules.ship_lengths.iter().map(|&l| l as usize).sum();
-        let density_legal =
-            rules.board_size >= 5 && rules.board_size <= 10 && total <= rules.board_size * rules.board_size / 2;
+        let density_legal = rules.board_size >= 5
+            && rules.board_size <= 10
+            && total <= rules.board_size * rules.board_size / 2;
         let expected = lengths_legal && density_legal;
-        assert_eq!(
-            ok, expected,
-            "validation mismatch for rules {:?}",
-            rules
-        );
+        assert_eq!(ok, expected, "validation mismatch for rules {:?}", rules);
     }
 }
 
@@ -207,7 +222,10 @@ fn prop_best_fleet_stays_in_epsilon_band() {
     // strategy deliberately trades a few penalty points for
     // unpredictability.)
     let mut rng = Xoshiro256::from_seed(0xB357);
-    let cfg = PlacementConfig { candidates: 128, ..Default::default() };
+    let cfg = PlacementConfig {
+        candidates: 128,
+        ..Default::default()
+    };
     let eps = cfg.sampling_epsilon as f64;
     for _ in 0..20 {
         let drawn = place_best_fleet(&mut rng, &cfg);
@@ -251,11 +269,23 @@ fn prop_bitboard_ops_are_closed() {
         let a = BitBoard::from_bits(rng.next_u64() as u128 | ((rng.next_u64() as u128) << 64));
         let b = BitBoard::from_bits(rng.next_u64() as u128 | ((rng.next_u64() as u128) << 64));
         assert_eq!((a & b).popcount() + (a ^ b).popcount(), (a | b).popcount());
-        assert_eq!((a | b).0 & !sonar::bitboard::MASK_100, 0, "OR leaked past 100 bits");
-        assert_eq!((a ^ b).0 & !sonar::bitboard::MASK_100, 0, "XOR leaked past 100 bits");
+        assert_eq!(
+            (a | b).0 & !sonar::bitboard::MASK_100,
+            0,
+            "OR leaked past 100 bits"
+        );
+        assert_eq!(
+            (a ^ b).0 & !sonar::bitboard::MASK_100,
+            0,
+            "XOR leaked past 100 bits"
+        );
         // Dilate is monotone and stays masked.
         let d = a.dilate8();
-        assert_eq!(d.0 & !sonar::bitboard::MASK_100, 0, "dilate leaked past 100 bits");
+        assert_eq!(
+            d.0 & !sonar::bitboard::MASK_100,
+            0,
+            "dilate leaked past 100 bits"
+        );
         assert_eq!(d.0 & a.0, a.0, "dilate lost cells");
     }
 }

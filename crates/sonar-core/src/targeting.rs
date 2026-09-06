@@ -53,7 +53,12 @@ pub struct StrategyStats {
 pub trait TargetingStrategy: Send + Sync {
     /// Choose the next move given the current view of the enemy board.
     /// `deadline` bounds the deliberation time.
-    fn choose(&mut self, view: &EnemyView, rng: &mut Xoshiro256, deadline: Deadline) -> (usize, usize);
+    fn choose(
+        &mut self,
+        view: &EnemyView,
+        rng: &mut Xoshiro256,
+        deadline: Deadline,
+    ) -> (usize, usize);
 
     /// Update internal state after a shot.
     fn observe(&mut self, r: usize, c: usize, result: crate::board::ShotResult);
@@ -220,9 +225,9 @@ fn reconstruct_sunk_ship(active_hits: u128, r: usize, c: usize, len: u8) -> u128
     mask_h
 }
 
-/// ============================================================
-/// PDF Targeting — state of the art single-pass density targeting.
-/// ============================================================
+// ============================================================
+// PDF Targeting — state of the art single-pass density targeting.
+// ============================================================
 
 /// PDF strategy configuration.
 #[derive(Clone, Copy, Debug)]
@@ -336,7 +341,12 @@ impl PdfTargeting {
     }
 
     /// Pick the best move (deadline-aware, but PDF is fast — ~1 ms).
-    pub fn choose_move(&self, view: &EnemyView, rng: &mut Xoshiro256, _deadline: Deadline) -> (usize, usize) {
+    pub fn choose_move(
+        &self,
+        view: &EnemyView,
+        rng: &mut Xoshiro256,
+        _deadline: Deadline,
+    ) -> (usize, usize) {
         let density = self.compute_density(view);
         let shots_mask = view.shots.0;
         // Find the max with a small random tie-break; already-shot cells
@@ -370,14 +380,23 @@ impl PdfTargeting {
             let i = rng.gen_range(cells.len() as u64) as usize;
             return cells[i];
         }
-        let pick = if best_count == 1 { 0 } else { rng.gen_range(best_count as u64) as usize };
+        let pick = if best_count == 1 {
+            0
+        } else {
+            rng.gen_range(best_count as u64) as usize
+        };
         let i = best_cells[pick];
         (i / 10, i % 10)
     }
 }
 
 impl TargetingStrategy for PdfTargeting {
-    fn choose(&mut self, view: &EnemyView, rng: &mut Xoshiro256, deadline: Deadline) -> (usize, usize) {
+    fn choose(
+        &mut self,
+        view: &EnemyView,
+        rng: &mut Xoshiro256,
+        deadline: Deadline,
+    ) -> (usize, usize) {
         let mv = self.choose_move(view, rng, deadline);
         self.last_density = self.compute_density(view);
         mv
@@ -403,7 +422,7 @@ impl TargetingStrategy for PdfTargeting {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::{Board, Ship, ShotResult};
+    use crate::board::ShotResult;
 
     #[test]
     fn test_density_initial() {
@@ -414,7 +433,12 @@ mod tests {
         // (the most ship placements pass through it).
         let center = d[5 * 10 + 5];
         let corner = d[0];
-        assert!(center > corner, "Center ({}) should be > corner ({})", center, corner);
+        assert!(
+            center > corner,
+            "Center ({}) should be > corner ({})",
+            center,
+            corner
+        );
         for &v in d.iter() {
             assert!(v >= 0.0);
         }
@@ -439,7 +463,12 @@ mod tests {
         // Cells adjacent to (5,5) should outrank distant cells.
         let adjacent = d[5 * 10 + 6];
         let far = d[0];
-        assert!(adjacent > far, "Adjacent ({}) should be > far ({})", adjacent, far);
+        assert!(
+            adjacent > far,
+            "Adjacent ({}) should be > far ({})",
+            adjacent,
+            far
+        );
     }
 
     #[test]
@@ -450,8 +479,17 @@ mod tests {
 
         for _ in 0..30 {
             let (r, c) = pdf.choose(&v, &mut rng, Deadline::none());
-            assert!(!v.shots.test(r, c), "Bot shot at already-shot cell ({},{})", r, c);
-            let res = if (r + c) % 3 == 0 { ShotResult::Hit } else { ShotResult::Miss };
+            assert!(
+                !v.shots.test(r, c),
+                "Bot shot at already-shot cell ({},{})",
+                r,
+                c
+            );
+            let res = if (r + c) % 3 == 0 {
+                ShotResult::Hit
+            } else {
+                ShotResult::Miss
+            };
             v.observe(r, c, res);
         }
     }
@@ -480,7 +518,7 @@ mod tests {
     fn test_stats_exposes_density() {
         let mut pdf = PdfTargeting::new(PdfConfig::default());
         let mut rng = Xoshiro256::from_seed(1);
-        let mut v = EnemyView::new();
+        let v = EnemyView::new();
         let _ = pdf.choose(&v, &mut rng, Deadline::none());
         let s = pdf.stats();
         assert!(s.density_matrix.is_some());

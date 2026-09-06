@@ -36,7 +36,9 @@ pub fn neighbors8_cached(r: usize, c: usize) -> u128 {
                 let hi_c = if cc < 9 { cc + 1 } else { 9 };
                 for dr in lo_r..=hi_r {
                     for dc in lo_c..=hi_c {
-                        if dr == rr && dc == cc { continue; }
+                        if dr == rr && dc == cc {
+                            continue;
+                        }
                         m |= 1u128 << (dr * 10 + dc);
                     }
                 }
@@ -57,10 +59,18 @@ pub fn neighbors4_cached(r: usize, c: usize) -> u128 {
         for rr in 0..10 {
             for cc in 0..10 {
                 let mut m = 0u128;
-                if rr > 0 { m |= 1u128 << ((rr - 1) * 10 + cc); }
-                if rr < 9 { m |= 1u128 << ((rr + 1) * 10 + cc); }
-                if cc > 0 { m |= 1u128 << (rr * 10 + (cc - 1)); }
-                if cc < 9 { m |= 1u128 << (rr * 10 + (cc + 1)); }
+                if rr > 0 {
+                    m |= 1u128 << ((rr - 1) * 10 + cc);
+                }
+                if rr < 9 {
+                    m |= 1u128 << ((rr + 1) * 10 + cc);
+                }
+                if cc > 0 {
+                    m |= 1u128 << (rr * 10 + (cc - 1));
+                }
+                if cc < 9 {
+                    m |= 1u128 << (rr * 10 + (cc + 1));
+                }
                 arr[rr * 10 + cc] = m;
             }
         }
@@ -196,18 +206,30 @@ impl BitBoard {
         let mut m = 0u128;
         // the row above
         if r > 0 {
-            if c > 0 { m |= Self::bit(r - 1, c - 1); }
+            if c > 0 {
+                m |= Self::bit(r - 1, c - 1);
+            }
             m |= Self::bit(r - 1, c);
-            if c < 9 { m |= Self::bit(r - 1, c + 1); }
+            if c < 9 {
+                m |= Self::bit(r - 1, c + 1);
+            }
         }
         // ten sam wiersz
-        if c > 0 { m |= Self::bit(r, c - 1); }
-        if c < 9 { m |= Self::bit(r, c + 1); }
+        if c > 0 {
+            m |= Self::bit(r, c - 1);
+        }
+        if c < 9 {
+            m |= Self::bit(r, c + 1);
+        }
         // the row below
         if r < 9 {
-            if c > 0 { m |= Self::bit(r + 1, c - 1); }
+            if c > 0 {
+                m |= Self::bit(r + 1, c - 1);
+            }
             m |= Self::bit(r + 1, c);
-            if c < 9 { m |= Self::bit(r + 1, c + 1); }
+            if c < 9 {
+                m |= Self::bit(r + 1, c + 1);
+            }
         }
         (self.0 & m) != 0
     }
@@ -217,16 +239,28 @@ impl BitBoard {
     pub fn neighbors8(r: usize, c: usize) -> BitBoard {
         let mut m = 0u128;
         if r > 0 {
-            if c > 0 { m |= Self::bit(r - 1, c - 1); }
+            if c > 0 {
+                m |= Self::bit(r - 1, c - 1);
+            }
             m |= Self::bit(r - 1, c);
-            if c < 9 { m |= Self::bit(r - 1, c + 1); }
+            if c < 9 {
+                m |= Self::bit(r - 1, c + 1);
+            }
         }
-        if c > 0 { m |= Self::bit(r, c - 1); }
-        if c < 9 { m |= Self::bit(r, c + 1); }
+        if c > 0 {
+            m |= Self::bit(r, c - 1);
+        }
+        if c < 9 {
+            m |= Self::bit(r, c + 1);
+        }
         if r < 9 {
-            if c > 0 { m |= Self::bit(r + 1, c - 1); }
+            if c > 0 {
+                m |= Self::bit(r + 1, c - 1);
+            }
             m |= Self::bit(r + 1, c);
-            if c < 9 { m |= Self::bit(r + 1, c + 1); }
+            if c < 9 {
+                m |= Self::bit(r + 1, c + 1);
+            }
         }
         BitBoard(m)
     }
@@ -235,10 +269,18 @@ impl BitBoard {
     #[inline]
     pub fn neighbors4(r: usize, c: usize) -> BitBoard {
         let mut m = 0u128;
-        if r > 0 { m |= Self::bit(r - 1, c); }
-        if r < 9 { m |= Self::bit(r + 1, c); }
-        if c > 0 { m |= Self::bit(r, c - 1); }
-        if c < 9 { m |= Self::bit(r, c + 1); }
+        if r > 0 {
+            m |= Self::bit(r - 1, c);
+        }
+        if r < 9 {
+            m |= Self::bit(r + 1, c);
+        }
+        if c > 0 {
+            m |= Self::bit(r, c - 1);
+        }
+        if c < 9 {
+            m |= Self::bit(r, c + 1);
+        }
         BitBoard(m)
     }
 
@@ -313,34 +355,48 @@ impl Iterator for BitIter {
 impl std::ops::BitAnd for BitBoard {
     type Output = BitBoard;
     #[inline(always)]
-    fn bitand(self, o: BitBoard) -> BitBoard { BitBoard(self.0 & o.0) }
+    fn bitand(self, o: BitBoard) -> BitBoard {
+        BitBoard(self.0 & o.0)
+    }
 }
 impl std::ops::BitOr for BitBoard {
     type Output = BitBoard;
     #[inline(always)]
-    fn bitor(self, o: BitBoard) -> BitBoard { BitBoard(self.0 | o.0) }
+    fn bitor(self, o: BitBoard) -> BitBoard {
+        BitBoard(self.0 | o.0)
+    }
 }
 impl std::ops::BitXor for BitBoard {
     type Output = BitBoard;
     #[inline(always)]
-    fn bitxor(self, o: BitBoard) -> BitBoard { BitBoard(self.0 ^ o.0) }
+    fn bitxor(self, o: BitBoard) -> BitBoard {
+        BitBoard(self.0 ^ o.0)
+    }
 }
 impl std::ops::Not for BitBoard {
     type Output = BitBoard;
     #[inline(always)]
-    fn not(self) -> BitBoard { BitBoard((!self.0) & MASK_100) }
+    fn not(self) -> BitBoard {
+        BitBoard((!self.0) & MASK_100)
+    }
 }
 impl std::ops::BitAndAssign for BitBoard {
     #[inline(always)]
-    fn bitand_assign(&mut self, o: BitBoard) { self.0 &= o.0; }
+    fn bitand_assign(&mut self, o: BitBoard) {
+        self.0 &= o.0;
+    }
 }
 impl std::ops::BitOrAssign for BitBoard {
     #[inline(always)]
-    fn bitor_assign(&mut self, o: BitBoard) { self.0 |= o.0; }
+    fn bitor_assign(&mut self, o: BitBoard) {
+        self.0 |= o.0;
+    }
 }
 impl std::ops::BitXorAssign for BitBoard {
     #[inline(always)]
-    fn bitxor_assign(&mut self, o: BitBoard) { self.0 ^= o.0; }
+    fn bitxor_assign(&mut self, o: BitBoard) {
+        self.0 ^= o.0;
+    }
 }
 
 #[cfg(test)]
@@ -433,12 +489,22 @@ mod tests {
         assert_eq!(COL_LEFT.count_ones(), 10, "COL_LEFT must have 10 bits");
         // Check specific bits.
         for r in 0..10 {
-            assert_ne!(COL_LEFT & (1u128 << (r * 10)), 0, "COL_LEFT missing bit {}", r * 10);
+            assert_ne!(
+                COL_LEFT & (1u128 << (r * 10)),
+                0,
+                "COL_LEFT missing bit {}",
+                r * 10
+            );
         }
         // COL_RIGHT must have 10 bits (one per row, column 9).
         assert_eq!(COL_RIGHT.count_ones(), 10, "COL_RIGHT must have 10 bits");
         for r in 0..10 {
-            assert_ne!(COL_RIGHT & (1u128 << (r * 10 + 9)), 0, "COL_RIGHT missing bit {}", r * 10 + 9);
+            assert_ne!(
+                COL_RIGHT & (1u128 << (r * 10 + 9)),
+                0,
+                "COL_RIGHT missing bit {}",
+                r * 10 + 9
+            );
         }
     }
 
@@ -453,7 +519,10 @@ mod tests {
         let d = b.dilate8();
         // Dilate must cover rows 3–8, columns 8–9 (no column 10 — OOB).
         // Bit 90 (row 9, col 0) must NOT be set — that would be wraparound.
-        assert!(!d.test(9, 0), "Dilate8 wraparound bug: (9,0) set for ship at col 9");
+        assert!(
+            !d.test(9, 0),
+            "Dilate8 wraparound bug: (9,0) set for ship at col 9"
+        );
         // Neighbouring cells must be set.
         assert!(d.test(3, 8));
         assert!(d.test(3, 9));

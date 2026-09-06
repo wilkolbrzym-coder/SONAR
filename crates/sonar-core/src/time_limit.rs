@@ -30,7 +30,10 @@ pub struct Deadline {
 impl Deadline {
     /// No time limit. Search is bounded only by hypothesis counts.
     pub fn none() -> Self {
-        Self { limit: None, check_interval: 1024 }
+        Self {
+            limit: None,
+            check_interval: 1024,
+        }
     }
 
     /// A limit of `secs` seconds from now (disabled on WASM — see module docs).
@@ -88,7 +91,11 @@ impl Deadline {
         {
             self.limit.map(|t| {
                 let now = Instant::now();
-                if t > now { t.duration_since(now) } else { Duration::ZERO }
+                if t > now {
+                    t.duration_since(now)
+                } else {
+                    Duration::ZERO
+                }
             })
         }
     }

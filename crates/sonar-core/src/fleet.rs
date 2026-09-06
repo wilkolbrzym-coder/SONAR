@@ -67,7 +67,8 @@ pub fn all_placements_by_len() -> Vec<Vec<(usize, usize, bool, u128)>> {
 
 /// Cached pre-calculated placements (initialised once on first access).
 use std::sync::OnceLock;
-static ALL_PLACEMENTS: OnceLock<Vec<Vec<(usize, usize, bool, u128)>>> = OnceLock::new();
+type Placements = Vec<Vec<(usize, usize, bool, u128)>>;
+static ALL_PLACEMENTS: OnceLock<Placements> = OnceLock::new();
 
 /// Access the cached pre-calculated ship placements.
 /// Index: length (2..=5) -> Vec<(r, c, horizontal, mask)>

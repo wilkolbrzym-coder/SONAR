@@ -43,16 +43,25 @@ fn test_full_game_over_protocol() {
     let winner;
     loop {
         // Sonar's engine picks a move targeting the human's fleet.
-        let mv = send(&mut sonar_side, r#"{"cmd":"choose_move","deadline_secs":0}"#);
+        let mv = send(
+            &mut sonar_side,
+            r#"{"cmd":"choose_move","deadline_secs":0}"#,
+        );
         let r = mv["row"].as_u64().expect("row") as usize;
         let c = mv["col"].as_u64().expect("col") as usize;
         // The human resolves the shot against their own fleet.
-        let res = send(&mut human_side, &format!(r#"{{"cmd":"receive_shot","r":{},"c":{}}}"#, r, c));
+        let res = send(
+            &mut human_side,
+            &format!(r#"{{"cmd":"receive_shot","r":{},"c":{}}}"#, r, c),
+        );
         let result_str = res["result"].as_str().expect("result");
         // Sonar observes the outcome.
         send(
             &mut sonar_side,
-            &format!(r#"{{"cmd":"observe","r":{},"c":{},"result":"{}"}}"#, r, c, result_str),
+            &format!(
+                r#"{{"cmd":"observe","r":{},"c":{},"result":"{}"}}"#,
+                r, c, result_str
+            ),
         );
         moves += 1;
         if result_str == "sunk" {
@@ -71,20 +80,35 @@ fn test_full_game_over_protocol() {
             }
         }
         // The human (simulated) fires back through the other engine.
-        let mv2 = send(&mut human_side, r#"{"cmd":"choose_move","deadline_secs":0}"#);
+        let mv2 = send(
+            &mut human_side,
+            r#"{"cmd":"choose_move","deadline_secs":0}"#,
+        );
         let r2 = mv2["row"].as_u64().expect("row") as usize;
         let c2 = mv2["col"].as_u64().expect("col") as usize;
-        let res2 = send(&mut sonar_side, &format!(r#"{{"cmd":"receive_shot","r":{},"c":{}}}"#, r2, c2));
+        let res2 = send(
+            &mut sonar_side,
+            &format!(r#"{{"cmd":"receive_shot","r":{},"c":{}}}"#, r2, c2),
+        );
         let result2 = res2["result"].as_str().expect("result");
         send(
             &mut human_side,
-            &format!(r#"{{"cmd":"observe","r":{},"c":{},"result":"{}"}}"#, r2, c2, result2),
+            &format!(
+                r#"{{"cmd":"observe","r":{},"c":{},"result":"{}"}}"#,
+                r2, c2, result2
+            ),
         );
         moves += 1;
         if result2 == "sunk" {
             let snap = send(&mut sonar_side, r#"{"cmd":"snapshot"}"#);
-            let sunk_mask: u128 = snap["our_sunk_mask"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0);
-            let fleet_mask: u128 = snap["our_fleet_mask"].as_str().and_then(|s| s.parse().ok()).unwrap_or(1);
+            let sunk_mask: u128 = snap["our_sunk_mask"]
+                .as_str()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            let fleet_mask: u128 = snap["our_fleet_mask"]
+                .as_str()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1);
             if sunk_mask == fleet_mask && fleet_mask != 0 {
                 winner = "human";
                 break;
@@ -126,8 +150,19 @@ fn test_protocol_response_shapes() {
 
     // suggest_move → documented fields
     let m = send(&mut e, r#"{"cmd":"suggest_move","deadline_secs":0}"#);
-    for field in ["row", "col", "coordinate", "confidence", "hypothesis_count", "elapsed_us"] {
-        assert!(m.get(field).is_some(), "suggest_move missing field {}", field);
+    for field in [
+        "row",
+        "col",
+        "coordinate",
+        "confidence",
+        "hypothesis_count",
+        "elapsed_us",
+    ] {
+        assert!(
+            m.get(field).is_some(),
+            "suggest_move missing field {}",
+            field
+        );
     }
 
     // probability → 100-element matrix
@@ -164,7 +199,11 @@ fn test_stdio_server_end_to_end() {
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 5, "one reply per request, got: {}", text);
     for line in lines {
-        assert!(serde_json::from_str::<Value>(line).is_ok(), "non-JSON reply: {}", line);
+        assert!(
+            serde_json::from_str::<Value>(line).is_ok(),
+            "non-JSON reply: {}",
+            line
+        );
     }
 }
 
@@ -209,7 +248,11 @@ fn test_hostile_inputs_never_panic() {
     ];
     for input in hostile {
         let reply = handle_line(&mut e, input);
-        assert!(reply.is_object(), "hostile input {:?} broke the protocol", input);
+        assert!(
+            reply.is_object(),
+            "hostile input {:?} broke the protocol",
+            input
+        );
     }
     // The engine must still be fully functional after the abuse.
     let v = send(&mut e, r#"{"cmd":"place_smart"}"#);
@@ -224,10 +267,16 @@ fn test_protocol_version_stability() {
     // documented fields stable (additive-only evolution).
     let mut e = fresh_engine();
     let v = send(&mut e, r#"{"cmd":"version"}"#);
-    for field in ["name", "version", "channel", "protocol", "language", "features"] {
+    for field in [
+        "name", "version", "channel", "protocol", "language", "features",
+    ] {
         assert!(v.get(field).is_some(), "version reply lost field {}", field);
     }
-    assert_eq!(v["protocol"].as_u64(), Some(1), "protocol version must stay 1 (frozen)");
+    assert_eq!(
+        v["protocol"].as_u64(),
+        Some(1),
+        "protocol version must stay 1 (frozen)"
+    );
 }
 
 #[test]

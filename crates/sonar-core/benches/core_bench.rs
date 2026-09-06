@@ -12,12 +12,12 @@
 //! hypothesis soft target — so measurements reflect the algorithm, not a
 //! wall-clock race.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sonar::bitboard::BitBoard;
-use sonar::board::{Board, ShotResult};
+use sonar::board::ShotResult;
 use sonar::hypothesis::{HybridTargeting, HypothesisFilter};
-use sonar::placement::{best_fleet, fleet_penalty, random_fleet, PlacementConfig};
-use sonar::player::{BotPlayer, Player};
+use sonar::placement::{PlacementConfig, best_fleet, fleet_penalty, random_fleet};
+use sonar::player::BotPlayer;
 use sonar::rng::Xoshiro256;
 use sonar::targeting::{EnemyView, PdfConfig, PdfTargeting, TargetingStrategy};
 use sonar::time_limit::Deadline;
@@ -73,12 +73,18 @@ fn bench_placement(c: &mut Criterion) {
         b.iter(|| black_box(random_fleet(&mut rng)))
     });
 
-    let cfg = PlacementConfig { candidates: 64, ..Default::default() };
+    let cfg = PlacementConfig {
+        candidates: 64,
+        ..Default::default()
+    };
     c.bench_function("best_fleet_64_candidates", |b| {
         b.iter(|| black_box(best_fleet(&mut rng, &cfg)))
     });
 
-    let cfg2 = PlacementConfig { candidates: 1024, ..Default::default() };
+    let cfg2 = PlacementConfig {
+        candidates: 1024,
+        ..Default::default()
+    };
     c.bench_function("best_fleet_1024_candidates", |b| {
         b.iter(|| black_box(best_fleet(&mut rng, &cfg2)))
     });
@@ -94,7 +100,16 @@ fn bench_placement(c: &mut Criterion) {
             Ship::new(6, 0, 3, true),
             Ship::new(8, 0, 2, true),
         ]
-        .map(|s| s.unwrap_or(Ship { r: 0, c: 0, len: 1, horizontal: true, mask: 1, sunk: false }));
+        .map(|s| {
+            s.unwrap_or(Ship {
+                r: 0,
+                c: 0,
+                len: 1,
+                horizontal: true,
+                mask: 1,
+                sunk: false,
+            })
+        });
         FleetConfig::from_ships(ships)
     });
     c.bench_function("fleet_penalty", |b| {
@@ -145,7 +160,10 @@ fn bench_hypotheses(c: &mut Criterion) {
     let mut hf = HypothesisFilter::new(256);
     c.bench_function("hypothesis_regen_256_initial", |b| {
         let v = EnemyView::new();
-        b.iter(|| black_box(hf.regenerate(black_box(&v), &mut rng, Deadline::none())))
+        b.iter(|| {
+            hf.regenerate(black_box(&v), &mut rng, Deadline::none());
+            black_box(())
+        })
     });
 
     let mut hf_mid = HypothesisFilter::new(256);
@@ -157,7 +175,10 @@ fn bench_hypotheses(c: &mut Criterion) {
         for i in 0..20 {
             v.observe((i * 3) % 10, (i * 7) % 10, ShotResult::Miss);
         }
-        b.iter(|| black_box(hf_mid.regenerate(black_box(&v), &mut rng, Deadline::none())))
+        b.iter(|| {
+            hf_mid.regenerate(black_box(&v), &mut rng, Deadline::none());
+            black_box(())
+        })
     });
 
     let mut ht = HybridTargeting::new().with_soft_target(64);
@@ -174,7 +195,9 @@ fn bench_full_game(c: &mut Criterion) {
     let mut rng = Xoshiro256::from_seed(42);
     c.bench_function("full_game_hybrid_vs_random", |b| {
         b.iter(|| {
-            let mut p1 = BotPlayer::new("P1", 256, true).without_learning();
+            let mut p1 = BotPlayer::new("P1", 256, true)
+                .without_learning()
+                .with_deadline(Deadline::none());
             let mut p2 = sonar::player::RandomBot::new("P2");
             p1.board = sonar::placement::place_best_fleet(&mut rng, &PlacementConfig::default());
             p2.board = sonar::placement::place_random_fleet(&mut rng);
@@ -185,8 +208,12 @@ fn bench_full_game(c: &mut Criterion) {
 
     c.bench_function("full_game_hybrid_vs_hybrid", |b| {
         b.iter(|| {
-            let mut p1 = BotPlayer::new("P1", 256, true).without_learning();
-            let mut p2 = BotPlayer::new("P2", 256, true).without_learning();
+            let mut p1 = BotPlayer::new("P1", 256, true)
+                .without_learning()
+                .with_deadline(Deadline::none());
+            let mut p2 = BotPlayer::new("P2", 256, true)
+                .without_learning()
+                .with_deadline(Deadline::none());
             p1.place_fleet();
             p2.place_fleet();
             let mut g = sonar::game::Game::new(Box::new(p1), Box::new(p2));

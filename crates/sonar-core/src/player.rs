@@ -2,11 +2,11 @@
 
 use crate::board::{Board, ShotResult};
 use crate::clock::unix_secs;
-use crate::placement::{place_best_fleet, place_random_fleet, PlacementConfig};
-use crate::rng::{thread_rng, Xoshiro256};
+use crate::learning;
+use crate::placement::{PlacementConfig, place_best_fleet, place_random_fleet};
+use crate::rng::{Xoshiro256, thread_rng};
 use crate::targeting::{EnemyView, HybridTargeting, PdfTargeting, TargetingStrategy};
 use crate::time_limit::Deadline;
-use crate::learning;
 
 /// A game participant.
 pub trait Player: Send {
@@ -105,7 +105,9 @@ impl BotPlayer {
 
     /// Record the finished game into the passive statistics DB.
     pub fn record_game(&mut self, won: bool, moves: u32) {
-        if !self.use_learning { return; }
+        if !self.use_learning {
+            return;
+        }
         let fleet_lens: Vec<u8> = self.board.ship_list.iter().map(|s| s.len).collect();
         let rec = learning::GameRecord {
             my_fleet_mask: self.board.ships.0.to_string(),
@@ -120,9 +122,15 @@ impl BotPlayer {
 }
 
 impl Player for BotPlayer {
-    fn name(&self) -> &str { &self.name }
-    fn board(&self) -> &Board { &self.board }
-    fn board_mut(&mut self) -> &mut Board { &mut self.board }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn board(&self) -> &Board {
+        &self.board
+    }
+    fn board_mut(&mut self) -> &mut Board {
+        &mut self.board
+    }
 
     fn choose_move(&mut self, deadline: Deadline) -> (usize, usize) {
         // If the caller passes a real deadline, use it. Otherwise fall back
@@ -179,9 +187,15 @@ impl PdfBot {
 }
 
 impl Player for PdfBot {
-    fn name(&self) -> &str { &self.name }
-    fn board(&self) -> &Board { &self.board }
-    fn board_mut(&mut self) -> &mut Board { &mut self.board }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn board(&self) -> &Board {
+        &self.board
+    }
+    fn board_mut(&mut self) -> &mut Board {
+        &mut self.board
+    }
 
     fn choose_move(&mut self, deadline: Deadline) -> (usize, usize) {
         self.pdf.choose(&self.view, &mut self.rng, deadline)
@@ -223,9 +237,15 @@ impl RandomBot {
 }
 
 impl Player for RandomBot {
-    fn name(&self) -> &str { &self.name }
-    fn board(&self) -> &Board { &self.board }
-    fn board_mut(&mut self) -> &mut Board { &mut self.board }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn board(&self) -> &Board {
+        &self.board
+    }
+    fn board_mut(&mut self) -> &mut Board {
+        &mut self.board
+    }
 
     fn choose_move(&mut self, _deadline: Deadline) -> (usize, usize) {
         // A random unfired cell.
@@ -262,7 +282,10 @@ pub struct HumanPlayer {
 }
 
 impl HumanPlayer {
-    pub fn new(name: impl Into<String>, input_fn: impl FnMut() -> (usize, usize) + Send + 'static) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        input_fn: impl FnMut() -> (usize, usize) + Send + 'static,
+    ) -> Self {
         Self {
             name: name.into(),
             board: Board::new(),
@@ -273,9 +296,15 @@ impl HumanPlayer {
 }
 
 impl Player for HumanPlayer {
-    fn name(&self) -> &str { &self.name }
-    fn board(&self) -> &Board { &self.board }
-    fn board_mut(&mut self) -> &mut Board { &mut self.board }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn board(&self) -> &Board {
+        &self.board
+    }
+    fn board_mut(&mut self) -> &mut Board {
+        &mut self.board
+    }
 
     fn choose_move(&mut self, _deadline: Deadline) -> (usize, usize) {
         (self.input_fn)()
@@ -308,12 +337,16 @@ mod tests {
             let (r, c) = bot1.choose_move(dl);
             let res = bot2.board_mut().shoot(r, c);
             bot1.observe_result(r, c, res);
-            if bot2.is_defeated() { break; }
+            if bot2.is_defeated() {
+                break;
+            }
 
             let (r, c) = bot2.choose_move(dl);
             let res = bot1.board_mut().shoot(r, c);
             bot2.observe_result(r, c, res);
-            if bot1.is_defeated() { break; }
+            if bot1.is_defeated() {
+                break;
+            }
         }
         assert!(bot1.is_defeated() || bot2.is_defeated());
     }
@@ -338,13 +371,21 @@ mod tests {
                 let (r, c) = pdf_bot.choose_move(dl);
                 let res = rnd_bot.board_mut().shoot(r, c);
                 pdf_bot.observe_result(r, c, res);
-                if rnd_bot.is_defeated() { winner = 1; break; }
+                if rnd_bot.is_defeated() {
+                    winner = 1;
+                    break;
+                }
                 let (r, c) = rnd_bot.choose_move(dl);
                 let res = pdf_bot.board_mut().shoot(r, c);
                 rnd_bot.observe_result(r, c, res);
-                if pdf_bot.is_defeated() { winner = 2; break; }
+                if pdf_bot.is_defeated() {
+                    winner = 2;
+                    break;
+                }
             }
-            if winner == 1 { pdf_wins += 1; }
+            if winner == 1 {
+                pdf_wins += 1;
+            }
         }
         assert!(pdf_wins >= 8, "PDF won only {}/10 vs random", pdf_wins);
     }

@@ -6,10 +6,10 @@ use crate::fleet::{FLEET, ship_mask};
 /// State of a single cell from the attacker's perspective.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cell {
-    Unknown,  // not fired at yet
-    Miss,     // water
-    Hit,      // hit (not yet sunk)
-    Sunk,     // sunk ship cell
+    Unknown, // not fired at yet
+    Miss,    // water
+    Hit,     // hit (not yet sunk)
+    Sunk,    // sunk ship cell
 }
 
 /// The result of a shot.
@@ -17,7 +17,7 @@ pub enum Cell {
 pub enum ShotResult {
     Miss,
     Hit,
-    Sunk(u8),   // length of the sunk ship
+    Sunk(u8),    // length of the sunk ship
     AlreadyShot, // this cell was already fired at
     Invalid,     // outside the board
 }
@@ -51,7 +51,14 @@ pub struct Ship {
 impl Ship {
     pub fn new(r: usize, c: usize, len: u8, horizontal: bool) -> Option<Self> {
         let mask = ship_mask(r, c, len, horizontal)?;
-        Some(Self { r, c, len, horizontal, mask, sunk: false })
+        Some(Self {
+            r,
+            c,
+            len,
+            horizontal,
+            mask,
+            sunk: false,
+        })
     }
 
     /// Does the ship occupy cell (r, c)?
@@ -138,18 +145,16 @@ impl Board {
         self.hits.0 |= bit;
         // Check whether a ship was sunk.
         for ship in &mut self.ship_list {
-            if ship.occupies(r, c) && !ship.sunk {
-                if ship.is_sunk_by(self.hits) {
-                    ship.sunk = true;
-                    // Oznacz pola jako zatopione
-                    self.sunk.0 |= ship.mask;
-                    // On a sink, mark the neighbouring cells as fired
-                    // (misses) — the standard Battleship rule.
-                    let dilated = BitBoard(ship.mask).dilate8().0;
-                    let extra = dilated & !ship.mask & MASK_100;
-                    self.shots.0 |= extra;
-                    return ShotResult::Sunk(ship.len);
-                }
+            if ship.occupies(r, c) && !ship.sunk && ship.is_sunk_by(self.hits) {
+                ship.sunk = true;
+                // Oznacz pola jako zatopione
+                self.sunk.0 |= ship.mask;
+                // On a sink, mark the neighbouring cells as fired
+                // (misses) — the standard Battleship rule.
+                let dilated = BitBoard(ship.mask).dilate8().0;
+                let extra = dilated & !ship.mask & MASK_100;
+                self.shots.0 |= extra;
+                return ShotResult::Sunk(ship.len);
             }
         }
         ShotResult::Hit
@@ -203,7 +208,11 @@ impl Board {
     pub fn cell_state_for_owner(&self, r: usize, c: usize) -> OwnerCell {
         let is_ship = self.is_ship(r, c);
         if !self.is_shot(r, c) {
-            if is_ship { OwnerCell::Ship } else { OwnerCell::Empty }
+            if is_ship {
+                OwnerCell::Ship
+            } else {
+                OwnerCell::Empty
+            }
         } else if self.is_sunk_cell(r, c) {
             OwnerCell::SunkShip
         } else if self.is_hit(r, c) {
@@ -220,7 +229,11 @@ impl Board {
 
     /// Lengths of the surviving (not yet sunk) ships.
     pub fn remaining_ship_lengths(&self) -> Vec<u8> {
-        self.ship_list.iter().filter(|s| !s.sunk).map(|s| s.len).collect()
+        self.ship_list
+            .iter()
+            .filter(|s| !s.sunk)
+            .map(|s| s.len)
+            .collect()
     }
 }
 

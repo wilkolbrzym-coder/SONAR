@@ -8,14 +8,17 @@
 //! they trade reproducibility for extra thinking time.
 
 use sonar::board::ShotResult;
+use sonar::placement::{PlacementConfig, place_best_fleet, place_random_fleet};
 use sonar::player::{BotPlayer, Player};
-use sonar::placement::{place_best_fleet, place_random_fleet, PlacementConfig};
 use sonar::rng::Xoshiro256;
 use sonar::time_limit::Deadline;
 
+/// One logged move: ((row, col), result code).
+type MoveLog = Vec<((usize, usize), u8)>;
+
 /// Play one full deterministic game and return the complete move log:
 /// every shot of both players plus the winner.
-fn play_logged(seed: u64, soft_target: usize, smart: bool) -> (Vec<((usize, usize), u8)>, u8) {
+fn play_logged(seed: u64, soft_target: usize, smart: bool) -> (MoveLog, u8) {
     let mut rng = Xoshiro256::from_seed(seed);
     let mut p1 = BotPlayer::new("P1", soft_target, smart)
         .without_learning()
@@ -81,7 +84,8 @@ fn test_same_seed_replays_identical_game() {
             seed
         );
         assert_eq!(
-            log_a, log_b,
+            log_a,
+            log_b,
             "move logs differ between replays of seed {} ({} vs {} moves)",
             seed,
             log_a.len(),
@@ -144,7 +148,11 @@ fn test_reset_equals_fresh_engine() {
     for i in 0..12 {
         let r = (rng.next_u64() % 10) as usize;
         let c = (rng.next_u64() % 10) as usize;
-        let res = if (r + c + i) % 3 == 0 { ShotResult::Hit } else { ShotResult::Miss };
+        let res = if (r + c + i) % 3 == 0 {
+            ShotResult::Hit
+        } else {
+            ShotResult::Miss
+        };
         used.observe_result(r, c, res);
     }
     let _ = used.choose_move(Deadline::none());
@@ -179,8 +187,14 @@ fn test_benchmark_seed_determinism() {
         sonar::benchmark::BotKind::Hybrid,
         sonar::benchmark::BotKind::Random,
     );
-    assert_eq!(a.stats1.wins, b.stats1.wins, "wins differ across identical benchmark runs");
-    assert_eq!(a.stats1.total_moves, b.stats1.total_moves, "move totals differ");
+    assert_eq!(
+        a.stats1.wins, b.stats1.wins,
+        "wins differ across identical benchmark runs"
+    );
+    assert_eq!(
+        a.stats1.total_moves, b.stats1.total_moves,
+        "move totals differ"
+    );
     assert_eq!(
         a.stats1.moves_sq_sum as u64, b.stats1.moves_sq_sum as u64,
         "move distribution differs"

@@ -15,7 +15,7 @@
 //! adversarial-robustness spec): per-cell occupancy, orientation balance,
 //! edge/corner mass.
 
-use sonar::placement::{place_best_fleet, place_random_fleet, PlacementConfig};
+use sonar::placement::{PlacementConfig, place_best_fleet, place_random_fleet};
 use sonar::rng::Xoshiro256;
 
 const FLEET: &[u8] = &[5, 4, 3, 3, 2];

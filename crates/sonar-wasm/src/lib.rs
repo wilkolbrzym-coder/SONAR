@@ -32,7 +32,7 @@
 // in the JS glue; `sonar::clock` uses it on this target.
 #[allow(unsafe_code)]
 mod ffi {
-    use std::alloc::{alloc, dealloc, Layout};
+    use std::alloc::{Layout, alloc, dealloc};
     use std::cell::RefCell;
 
     // The engine instance owned by this WASM module. One module = one
@@ -47,7 +47,7 @@ mod ffi {
     // Shared response buffer. Replaced by every `sonar_request` call;
     // valid until the *next* call (the JS glue reads it immediately).
     thread_local! {
-        static RESPONSE: RefCell<Vec<u8>> = RefCell::new(Vec::new());
+        static RESPONSE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     }
 
     /// Allocate `len` bytes and return a pointer to them.

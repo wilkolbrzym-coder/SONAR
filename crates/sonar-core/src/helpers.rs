@@ -106,7 +106,7 @@ pub fn parse_coordinate(s: &str) -> Option<(usize, usize)> {
     let col = (letter as u8 - b'A') as usize;
     let rest: String = chars.collect();
     let row: usize = rest.parse().ok()?;
-    if row < 1 || row > 10 {
+    if !(1..=10).contains(&row) {
         return None;
     }
     Some((row - 1, col))

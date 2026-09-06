@@ -17,6 +17,9 @@ use sonar::time_limit::Deadline;
 
 /// Drive one full game between two bots while checking every invariant
 /// after every single move. Returns the winner.
+// The move counters double as human-readable move numbers in panic
+// messages, which is why they are not a plain `for` loop counter.
+#[allow(clippy::explicit_counter_loop)]
 fn play_game_checked(seed: u64, soft: usize) -> u8 {
     let mut p1 = BotPlayer::new("P1", soft, true)
         .without_learning()
@@ -100,17 +103,20 @@ fn check_board_consistency(b: &Board, ctx: &str) {
     let sunk = b.sunk.0;
     let ships = b.ships.0;
     assert_eq!(
-        hits & !shots, 0,
+        hits & !shots,
+        0,
         "{}: hits must be a subset of shots (hit without a shot?)",
         ctx
     );
     assert_eq!(
-        sunk & !hits, 0,
+        sunk & !hits,
+        0,
         "{}: sunk must be a subset of hits (sunk without a hit?)",
         ctx
     );
     assert_eq!(
-        ships & !hits & sunk, 0,
+        ships & !hits & sunk,
+        0,
         "{}: sunk cells must be ship cells",
         ctx
     );
@@ -129,7 +135,8 @@ fn check_board_consistency(b: &Board, ctx: &str) {
             );
         } else {
             assert_eq!(
-                sunk & s.mask, 0,
+                sunk & s.mask,
+                0,
                 "{}: live ship marked as sunk in the mask",
                 ctx
             );
@@ -209,12 +216,7 @@ fn test_all_games_terminate_quickly() {
         );
         // 2 players × 100 cells = 200 shots max in theory; each side
         // individually must stay ≤ 130.
-        assert!(
-            m <= 260,
-            "game {} took {} total shots — too many",
-            i,
-            m
-        );
+        assert!(m <= 260, "game {} took {} total shots — too many", i, m);
     }
 }
 
@@ -239,7 +241,7 @@ fn test_board_shoot_invariants() {
                 }
                 ShotResult::Sunk(len) => {
                     assert!(b.is_sunk_cell(r, c));
-                    assert!(len >= 1 && len <= 5);
+                    assert!((1..=5).contains(&len));
                 }
                 ShotResult::AlreadyShot | ShotResult::Invalid => {}
             }

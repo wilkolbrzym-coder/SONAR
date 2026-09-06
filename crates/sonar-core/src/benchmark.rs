@@ -23,8 +23,8 @@
 
 use crate::clock::now_us;
 use crate::game::Game;
+use crate::placement::{PlacementConfig, place_best_fleet, place_random_fleet};
 use crate::player::{BotPlayer, PdfBot, Player, RandomBot};
-use crate::placement::{place_best_fleet, place_random_fleet, PlacementConfig};
 use crate::rng::Xoshiro256;
 use crate::time_limit::Deadline;
 use std::time::Duration;
@@ -52,29 +52,47 @@ impl PlayerStats {
     }
     pub fn win_rate(&self) -> f64 {
         let g = self.games();
-        if g == 0 { 0.0 } else { self.wins as f64 / g as f64 * 100.0 }
+        if g == 0 {
+            0.0
+        } else {
+            self.wins as f64 / g as f64 * 100.0
+        }
     }
     pub fn avg_moves_in_wins(&self) -> f64 {
-        if self.wins == 0 { 0.0 } else { self.moves_in_wins as f64 / self.wins as f64 }
+        if self.wins == 0 {
+            0.0
+        } else {
+            self.moves_in_wins as f64 / self.wins as f64
+        }
     }
     pub fn avg_moves(&self) -> f64 {
-        if self.games() == 0 { 0.0 } else { self.total_moves as f64 / self.games() as f64 }
+        if self.games() == 0 {
+            0.0
+        } else {
+            self.total_moves as f64 / self.games() as f64
+        }
     }
     /// Standard error of the mean number of moves per game.
     pub fn moves_stderr(&self) -> f64 {
         let n = self.games() as f64;
-        if n < 2.0 { return 0.0; }
+        if n < 2.0 {
+            return 0.0;
+        }
         let mean = self.avg_moves();
         let var = (self.moves_sq_sum / n - mean * mean).max(0.0);
         (var / n).sqrt()
     }
     pub fn avg_move_time_us(&self) -> f64 {
-        if self.total_moves == 0 { 0.0 } else {
+        if self.total_moves == 0 {
+            0.0
+        } else {
             self.total_time_us as f64 / self.total_moves as f64
         }
     }
     pub fn moves_per_sec(&self) -> f64 {
-        if self.total_time_us == 0 { 0.0 } else {
+        if self.total_time_us == 0 {
+            0.0
+        } else {
             self.total_moves as f64 * 1e6 / self.total_time_us as f64
         }
     }
@@ -96,7 +114,10 @@ fn wilson_interval(successes: f64, n: f64, z: f64) -> (f64, f64) {
     let denom = 1.0 + z2 / n;
     let centre = p + z2 / (2.0 * n);
     let margin = z * ((p * (1.0 - p) / n + z2 / (4.0 * n * n)).sqrt());
-    (((centre - margin) / denom).max(0.0), ((centre + margin) / denom).min(1.0))
+    (
+        ((centre - margin) / denom).max(0.0),
+        ((centre + margin) / denom).min(1.0),
+    )
 }
 
 /// A short machine-readable summary of one matchup, used by the JSON
@@ -218,8 +239,8 @@ pub fn run_benchmark_seq(
         // Attribute time proportionally to move counts (approximation —
         // exact per-move timing would distort the fast path).
         let total_moves = m1 + m2;
-        let t1 = if total_moves > 0 { dur * m1 / total_moves } else { 0 };
-        let t2 = if total_moves > 0 { dur * m2 / total_moves } else { 0 };
+        let t1 = (dur * m1).checked_div(total_moves).unwrap_or(0);
+        let t2 = (dur * m2).checked_div(total_moves).unwrap_or(0);
 
         if winner == 1 {
             record_win(&mut stats1, m1, t1);
@@ -285,7 +306,7 @@ pub fn run_benchmark(
 ) -> (PlayerStats, PlayerStats, Duration) {
     let threads = cfg.threads.max(1) as usize;
     let games = cfg.games as usize;
-    let games_per_thread = (games + threads - 1) / threads;
+    let games_per_thread = games.div_ceil(threads);
 
     let results: std::sync::Mutex<Vec<(PlayerStats, PlayerStats)>> =
         std::sync::Mutex::new(Vec::new());
@@ -319,8 +340,8 @@ pub fn run_benchmark(
                     let p2 = make_bot(k2, "P2", mh);
                     let (winner, m1, m2, dur) = play_one(p1, p2, &mut rng, sp);
                     let total_moves = m1 + m2;
-                    let t1 = if total_moves > 0 { dur * m1 / total_moves } else { 0 };
-                    let t2 = if total_moves > 0 { dur * m2 / total_moves } else { 0 };
+                    let t1 = (dur * m1).checked_div(total_moves).unwrap_or(0);
+                    let t2 = (dur * m2).checked_div(total_moves).unwrap_or(0);
                     if winner == 1 {
                         record_win(&mut stats1, m1, t1);
                         record_loss(&mut stats2, m2, t2);
@@ -392,7 +413,13 @@ fn print_player_stats(name: &str, s: &PlayerStats) {
     println!("│  Player: {:<52}│", name);
     println!(
         "│    Wins: {:<52}│",
-        format!("{} ({:.1}%)  Wilson 95% CI: [{:.1}%, {:.1}%]", s.wins, s.win_rate(), lo * 100.0, hi * 100.0)
+        format!(
+            "{} ({:.1}%)  Wilson 95% CI: [{:.1}%, {:.1}%]",
+            s.wins,
+            s.win_rate(),
+            lo * 100.0,
+            hi * 100.0
+        )
     );
     println!("│    Losses: {:<51}│", s.losses);
     println!(
@@ -403,8 +430,14 @@ fn print_player_stats(name: &str, s: &PlayerStats) {
         "│    E[moves] overall: {:<39}│",
         format!("{:.1} ± {:.1}", s.avg_moves(), s.moves_stderr())
     );
-    println!("│    Avg move time: {:<43}│", format!("{:.2} μs", s.avg_move_time_us()));
-    println!("│    Moves/sec: {:<48}│", format!("{:.0}", s.moves_per_sec()));
+    println!(
+        "│    Avg move time: {:<43}│",
+        format!("{:.2} μs", s.avg_move_time_us())
+    );
+    println!(
+        "│    Moves/sec: {:<48}│",
+        format!("{:.0}", s.moves_per_sec())
+    );
 }
 
 #[cfg(test)]

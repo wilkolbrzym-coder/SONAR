@@ -21,8 +21,6 @@
 //! sonar help
 //! ```
 
-use std::time::Instant;
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("help");
@@ -48,7 +46,9 @@ fn main() {
 }
 
 fn arg_n(args: &[String], default: u32) -> u32 {
-    args.get(2).and_then(|s| s.parse::<u32>().ok()).unwrap_or(default)
+    args.get(2)
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(default)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,13 +57,19 @@ fn arg_n(args: &[String], default: u32) -> u32 {
 
 fn print_version() {
     println!("sonar {} (beta)", env!("CARGO_PKG_VERSION"));
-    println!("protocol: json-ipc v{}", sonar::json_server::PROTOCOL_VERSION);
+    println!(
+        "protocol: json-ipc v{}",
+        sonar::json_server::PROTOCOL_VERSION
+    );
     println!("engine: PDF density + Bayesian hypothesis filter");
     println!("license: Apache-2.0");
 }
 
 fn print_help() {
-    println!("Sonar {} — the world's strongest battleship AI engine", env!("CARGO_PKG_VERSION"));
+    println!(
+        "Sonar {} — the world's strongest battleship AI engine",
+        env!("CARGO_PKG_VERSION")
+    );
     println!();
     println!("USAGE:");
     println!("  sonar                        show this help");
@@ -94,16 +100,33 @@ fn run_benchmark(games: u32) {
     let cfg = sonar::benchmark::BenchmarkConfig {
         games,
         threads: 4,
-        max_hypotheses: 256,
+        // Sonar's honest default strength (EngineConfig default).
+        max_hypotheses: 1024,
         smart_placement: true,
         seed: 0xBEEF_CAFE_1234_5678,
     };
 
     let matchups: Vec<(&str, sonar::benchmark::BotKind, sonar::benchmark::BotKind)> = vec![
-        ("Sonar-Hybrid vs Random", sonar::benchmark::BotKind::Hybrid, sonar::benchmark::BotKind::Random),
-        ("Sonar-Hybrid vs PdfOnly", sonar::benchmark::BotKind::Hybrid, sonar::benchmark::BotKind::Pdf),
-        ("PdfOnly vs Random", sonar::benchmark::BotKind::Pdf, sonar::benchmark::BotKind::Random),
-        ("Sonar-Hybrid vs Sonar-Hybrid (first-mover check)", sonar::benchmark::BotKind::Hybrid, sonar::benchmark::BotKind::Hybrid),
+        (
+            "Sonar-Hybrid vs Random",
+            sonar::benchmark::BotKind::Hybrid,
+            sonar::benchmark::BotKind::Random,
+        ),
+        (
+            "Sonar-Hybrid vs PdfOnly",
+            sonar::benchmark::BotKind::Hybrid,
+            sonar::benchmark::BotKind::Pdf,
+        ),
+        (
+            "PdfOnly vs Random",
+            sonar::benchmark::BotKind::Pdf,
+            sonar::benchmark::BotKind::Random,
+        ),
+        (
+            "Sonar-Hybrid vs Sonar-Hybrid (first-mover check)",
+            sonar::benchmark::BotKind::Hybrid,
+            sonar::benchmark::BotKind::Hybrid,
+        ),
     ];
 
     let total_start = std::time::Instant::now();
@@ -126,9 +149,9 @@ fn run_benchmark(games: u32) {
 
 fn run_benchmark_reference(games: u32) {
     use sonar::game::Game;
+    use sonar::placement::{PlacementConfig, place_best_fleet};
     use sonar::player::{BotPlayer, Player};
-    use sonar::placement::{place_best_fleet, PlacementConfig};
-    use sonar::reference_bots::{make_reference, ReferenceKind};
+    use sonar::reference_bots::{ReferenceKind, make_reference};
     use sonar::time_limit::Deadline;
 
     println!("╔══════════════════════════════════════════════════════════════════╗");
@@ -152,7 +175,7 @@ fn run_benchmark_reference(games: u32) {
         let wins = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
         let moves_in_wins = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
 
-        let games_per_thread = (games + num_threads - 1) / num_threads;
+        let games_per_thread = games.div_ceil(num_threads);
         let mut handles = Vec::new();
 
         for t in 0..num_threads {
@@ -167,7 +190,7 @@ fn run_benchmark_reference(games: u32) {
             handles.push(std::thread::spawn(move || {
                 let dl = Deadline::none();
                 for i in start_idx..end_idx {
-                    let mut our = BotPlayer::new("Sonar", 256, true)
+                    let mut our = BotPlayer::new("Sonar", 1024, true)
                         .without_learning()
                         .with_deadline(sonar::time_limit::Deadline::none());
                     let mut opp = make_reference(kind, name);
@@ -182,7 +205,8 @@ fn run_benchmark_reference(games: u32) {
                     let winner = g.play(dl);
                     if winner == 1 {
                         wins.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        moves_in_wins.fetch_add(g.moves_p1 as u64, std::sync::atomic::Ordering::Relaxed);
+                        moves_in_wins
+                            .fetch_add(g.moves_p1 as u64, std::sync::atomic::Ordering::Relaxed);
                     }
                 }
             }));
@@ -201,7 +225,10 @@ fn run_benchmark_reference(games: u32) {
         } else {
             0.0
         };
-        println!("  Wins: {}/{} ({:.1}%) | avg {:.1} moves/win", total_wins, games, win_rate, avg_moves);
+        println!(
+            "  Wins: {}/{} ({:.1}%) | avg {:.1} moves/win",
+            total_wins, games, win_rate, avg_moves
+        );
         println!("  Time: {:?}", elapsed);
         println!();
     }
@@ -221,11 +248,14 @@ fn run_benchmark_asymmetric(
 ) {
     use sonar::game::Game;
     use sonar::player::{BotPlayer, Player};
-    use sonar::reference_bots::{make_reference, ReferenceKind};
+    use sonar::reference_bots::{ReferenceKind, make_reference};
     use sonar::time_limit::Deadline;
 
     println!("╔══════════════════════════════════════════════════════════════════╗");
-    println!("║   Sonar handicapped — {} (opponent advantage)                     ", title);
+    println!(
+        "║   Sonar handicapped — {} (opponent advantage)                     ",
+        title
+    );
     println!("╚══════════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -247,10 +277,9 @@ fn run_benchmark_asymmetric(
                 .with_deadline(Deadline::from_secs(sonar_secs));
             let mut opp = make_reference(kind, name);
             our.place_fleet();
-            let mut rng_for_opp = sonar::rng::Xoshiro256::from_seed(
-                (i as u64).wrapping_mul(0xCAFE).wrapping_add(11),
-            );
-            use sonar::placement::{place_best_fleet, PlacementConfig};
+            let mut rng_for_opp =
+                sonar::rng::Xoshiro256::from_seed((i as u64).wrapping_mul(0xCAFE).wrapping_add(11));
+            use sonar::placement::{PlacementConfig, place_best_fleet};
             *opp.board_mut() = place_best_fleet(&mut rng_for_opp, &PlacementConfig::default());
 
             let dl_sonar = Deadline::from_secs(sonar_secs);
@@ -263,7 +292,12 @@ fn run_benchmark_asymmetric(
             }
         }
         let elapsed = start.elapsed();
-        println!("  Wins: {}/{} ({:.1}%)", wins, games, wins as f64 / games as f64 * 100.0);
+        println!(
+            "  Wins: {}/{} ({:.1}%)",
+            wins,
+            games,
+            wins as f64 / games as f64 * 100.0
+        );
         println!("  Time: {:?}", elapsed);
         println!();
     }
@@ -278,8 +312,8 @@ fn run_benchmark_hypotheses(games: u32) {
     // hypothesis budget. Demonstrates the algorithm (not just compute)
     // carries the advantage.
     use sonar::game::Game;
+    use sonar::placement::{PlacementConfig, place_best_fleet};
     use sonar::player::{BotPlayer, Player};
-    use sonar::placement::{place_best_fleet, PlacementConfig};
     use sonar::time_limit::Deadline;
 
     println!("╔══════════════════════════════════════════════════════════════════╗");
@@ -341,8 +375,8 @@ fn run_benchmark_hypotheses(games: u32) {
 
 fn run_play_cli() {
     use sonar::board::ShotResult;
-    use sonar::player::{BotPlayer, Player};
     use sonar::placement::PlacementConfig;
+    use sonar::player::{BotPlayer, Player};
     use sonar::rng::Xoshiro256;
     use sonar::time_limit::Deadline;
 
@@ -365,7 +399,10 @@ fn run_play_cli() {
 
     loop {
         print_cli_boards(&bot_board, &my_board);
-        println!("Move #{}. Enter coordinates (e.g. E5) or 'q' to quit: ", moves + 1);
+        println!(
+            "Move #{}. Enter coordinates (e.g. E5) or 'q' to quit: ",
+            moves + 1
+        );
         let mut input = String::new();
         if std::io::stdin().read_line(&mut input).is_err() {
             eprintln!("input error, quitting");
@@ -497,10 +534,19 @@ fn run_learning_stats() {
         println!();
         println!("Top fleet placement patterns (top 5, passive statistics):");
         for (i, (mask, rate, n)) in db.best_fleet_patterns(5).iter().enumerate() {
-            println!("  {}. win_rate={:.1}% ({} games) mask={}", i + 1, rate * 100.0, n, mask);
+            println!(
+                "  {}. win_rate={:.1}% ({} games) mask={}",
+                i + 1,
+                rate * 100.0,
+                n,
+                mask
+            );
         }
         println!();
-        println!("Statistics file: {}", sonar::learning::default_path().display());
+        println!(
+            "Statistics file: {}",
+            sonar::learning::default_path().display()
+        );
         println!("(records are passive statistics — they never influence play)");
     }
 }

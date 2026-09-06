@@ -1,0 +1,16 @@
+# Cargo build configuration for Sonar.
+#
+# NOTE: `-C target-cpu=native` is intentionally NOT set here. The default
+# build is portable across every x86_64/aarch64 CPU so a binary built on one
+# machine runs everywhere. For a single-machine maximal build use:
+#
+#   RUSTFLAGS="-C target-cpu=native" cargo build --release
+#
+# Cargo aliases for common workflows.
+[alias]
+b = "build --release"
+br = "build --release"
+r = "run --release"
+t = "test --release"
+wasm = "build --release --target wasm32-unknown-unknown"
+bench-fast = "bench --bench core_bench -- --quick"

@@ -1,0 +1,30 @@
+[package]
+name = "redteam"
+version = "0.5.0-beta.1"
+edition = "2024"
+rust-version = "1.89"
+authors = ["Sonar Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/wilkolbrzym-coder/SONAR"
+description = "Sonar adversarial red-team harness — OUT OF TREE, NEVER SHIPPED. Attacks the engine to measure and track exploitability."
+publish = false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OUT-OF-TREE CONTRACT
+#
+# This crate is intentionally NOT a member of the Sonar workspace (the
+# root Cargo.toml lists it under `exclude`). It is:
+#   * never published,
+#   * never linked into the shipped engine or the WASM bundle,
+#   * run only by developers (`cargo run --manifest-path redteam/Cargo.toml`)
+#     and by CI as an adversarial gate.
+# Its findings feed EXPLOITABILITY.md — the exploitability tracking file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[dependencies]
+sonar = { path = "../crates/sonar-core" }
+serde_json = "1"
+
+[[bin]]
+name = "redteam"
+path = "src/main.rs"

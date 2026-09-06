@@ -1,0 +1,54 @@
+# Sonar workspace — the world's strongest battleship AI engine.
+#
+# Pure Rust. Apache 2.0. Version 0.5.0-beta.1 (beta).
+#
+# Layout:
+#   crates/sonar-core  — the engine library + `sonar` CLI (lib + bin)
+#   crates/sonar-wasm  — WebAssembly cdylib for the browser app
+
+[workspace]
+resolver = "3"
+members = ["crates/sonar-core", "crates/sonar-simd", "crates/sonar-wasm"]
+# The red-team harness is out-of-tree by contract: not a member, never
+# shipped, never linked into the engine or WASM bundle. See redteam/.
+exclude = ["redteam"]
+
+[workspace.package]
+version = "0.5.0-beta.1"
+edition = "2024"
+rust-version = "1.89"
+authors = ["Sonar Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/wilkolbrzym-coder/SONAR"
+homepage = "https://github.com/wilkolbrzym-coder/SONAR"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ── Shared profiles ─────────────────────────────────────────────────────────
+#
+# Maximum optimization. Portable across x86_64/aarch64 CPUs — no
+# target-cpu=native here (opt in via RUSTFLAGS for single-machine builds).
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+overflow-checks = false
+incremental = false
+
+# Release + runtime checks: same codegen path, but arithmetic overflow and
+# unwinding enabled. Used by CI, fuzzing, and anyone auditing the engine.
+[profile.release-checked]
+inherits = "release"
+panic = "unwind"
+overflow-checks = true
+debug = true
+strip = "none"
+
+[profile.bench]
+inherits = "release"
+debug = true

@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sonar — Battleship AI Engine</title>
+  <meta name="description" content="Sonar: the world's strongest battleship AI engine. Play it, test it, benchmark it — 100% in your browser. Pure Rust + WebAssembly, Apache-2.0." />
+  <meta name="theme-color" content="#0e1417" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f3f8fa" media="(prefers-color-scheme: light)" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- ── Top app bar (Material 3) ─────────────────────────────────────── -->
+    <header class="app-bar">
+      <div class="app-bar-row">
+        <span class="brand-name" aria-label="Sonar">SONAR</span>
+        <span class="version-chip" id="brandVersion">0.5.0-beta.1</span>
+        <span class="grow"></span>
+        <span class="engine-pill" id="engineState" title="WASM engine status">engine: loading…</span>
+        <button class="icon-btn" id="btnTheme" title="Toggle light / dark theme" aria-label="Toggle theme">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path class="icon-theme-dark" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button class="tab" data-tab="play" role="tab">Play</button>
+        <button class="tab" data-tab="bench" role="tab">Benchmarks</button>
+        <button class="tab" data-tab="test" role="tab">Tests</button>
+        <button class="tab" data-tab="docs" role="tab">Docs</button>
+      </nav>
+    </header>
+
+    <main id="main">
+
+      <!-- ══ PLAY ═════════════════════════════════════════════════════════ -->
+      <section id="tab-play" class="panel" hidden>
+
+        <!-- Start screen: game modes -->
+        <div id="playHome" class="play-home">
+          <div class="hero">
+            <h1>Pick your battle.</h1>
+            <p class="hero-sub">
+              Every mode below runs the full Sonar engine — compiled to WebAssembly,
+              executing locally in this tab. No servers, no accounts, no telemetry.
+            </p>
+          </div>
+
+          <h2 class="group-title">Versus the engine</h2>
+          <div class="mode-grid">
+            <button class="mode-card primary-card" data-mode="duel">
+              <span class="mode-emoji" aria-hidden="true">⚔</span>
+              <span class="mode-name">Classic Duel</span>
+              <span class="mode-desc">Place your fleet and trade shots with Sonar on the standard 10×10 board.</span>
+              <span class="mode-chips">
+                <span class="chip">10×10</span><span class="chip">5 ships</span><span class="chip">vs engine</span>
+              </span>
+            </button>
+            <button class="mode-card" data-mode="advisor">
+              <span class="mode-emoji" aria-hidden="true">🧭</span>
+              <span class="mode-name">Paper Advisor</span>
+              <span class="mode-desc">Playing a real-world opponent? Fire in reality, enter the result — Sonar computes your next shot.</span>
+              <span class="mode-chips">
+                <span class="chip">10×10</span><span class="chip">advisor</span><span class="chip">full analysis</span>
+              </span>
+            </button>
+          </div>
+
+          <h2 class="group-title">Solo hunts — hidden fleets</h2>
+          <p class="group-sub">Sonar hides a fleet under the waves. Find it in as few shots as you can — toggle Sonar's hints to see how a world-class hunter thinks.</p>
+          <div class="mode-grid">
+            <button class="mode-card" data-mode="hunt_micro">
+              <span class="mode-emoji" aria-hidden="true">🎯</span>
+              <span class="mode-name">Skirmish 7×7</span>
+              <span class="mode-desc">A short, sharp hunt: three ships on a small ocean.</span>
+              <span class="mode-chips"><span class="chip">7×7</span><span class="chip">3 ships</span><span class="chip">~2 min</span></span>
+            </button>
+            <button class="mode-card" data-mode="hunt_classic">
+              <span class="mode-emoji" aria-hidden="true">🌊</span>
+              <span class="mode-name">Classic Hunt</span>
+              <span class="mode-desc">The standard hidden fleet — pure targeting skill.</span>
+              <span class="mode-chips"><span class="chip">10×10</span><span class="chip">5 ships</span></span>
+            </button>
+            <button class="mode-card" data-mode="hunt_torus">
+              <span class="mode-emoji" aria-hidden="true">🍩</span>
+              <span class="mode-name">Torus 8×8</span>
+              <span class="mode-desc">The board wraps around — no corners to hide in.</span>
+              <span class="mode-chips"><span class="chip">8×8 wrap</span><span class="chip">4 ships</span></span>
+            </button>
+            <button class="mode-card" data-mode="hunt_big16">
+              <span class="mode-emoji" aria-hidden="true">🛟</span>
+              <span class="mode-name">Big Ocean 16×16</span>
+              <span class="mode-desc">256 cells, eight ships — a long-range search.</span>
+              <span class="mode-chips"><span class="chip">16×16</span><span class="chip">8 ships</span></span>
+            </button>
+            <button class="mode-card" data-mode="hunt_archipelago">
+              <span class="mode-emoji" aria-hidden="true">🏝</span>
+              <span class="mode-name">Archipelago 12×12</span>
+              <span class="mode-desc">Islands block shots and placements — work around the land.</span>
+              <span class="mode-chips"><span class="chip">12×12</span><span class="chip">8 holes</span></span>
+            </button>
+            <button class="mode-card" data-mode="hunt_poly">
+              <span class="mode-emoji" aria-hidden="true">🧩</span>
+              <span class="mode-name">Polyomino Fleet</span>
+              <span class="mode-desc">L-, T- and S-shaped ships — geometry you have never hunted before.</span>
+              <span class="mode-chips"><span class="chip">10×10</span><span class="chip">5 shapes</span></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Duel: fleet placement -->
+        <div id="playSetup" class="setup" hidden>
+          <div class="panel-head">
+            <h1>Place your fleet</h1>
+            <div class="controls">
+              <label>Difficulty
+                <select id="playDifficulty">
+                  <option value="16">Ensign (16)</option>
+                  <option value="64">Lieutenant (64)</option>
+                  <option value="256" selected>Commander (256)</option>
+                  <option value="1024">Captain (1024)</option>
+                  <option value="4096">Admiral (4096)</option>
+                </select>
+              </label>
+              <button id="btnBackHome1" class="tonal-btn">Modes</button>
+            </div>
+          </div>
+          <div class="setup-flex">
+            <div class="ship-palette" id="shipPalette">
+              <div class="palette-hint">Pick a ship, click the grid. <b>R</b> rotates.</div>
+              <button class="ship-chip" data-len="5"><span class="ship-icon h" style="--len:5"></span>Carrier · 5</button>
+              <button class="ship-chip" data-len="4"><span class="ship-icon h" style="--len:4"></span>Battleship · 4</button>
+              <button class="ship-chip" data-len="3"><span class="ship-icon h" style="--len:3"></span>Submarine · 3</button>
+              <button class="ship-chip" data-len="3"><span class="ship-icon h" style="--len:3"></span>Cruiser · 3</button>
+              <button class="ship-chip" data-len="2"><span class="ship-icon h" style="--len:2"></span>Destroyer · 2</button>
+              <div class="palette-actions">
+                <button id="btnRotate" class="tonal-btn">↻ Rotate <kbd>R</kbd></button>
+                <button id="btnAutoPlace" class="tonal-btn">Sonar-grade</button>
+                <button id="btnRandomPlace" class="tonal-btn">Random</button>
+                <button id="btnClearFleet" class="tonal-btn">Clear</button>
+              </div>
+            </div>
+            <div class="board-wrap">
+              <div class="board-label">Your waters — place ships here (no touching, not even corners)</div>
+              <div class="board setup-board" id="boardMy"></div>
+            </div>
+          </div>
+          <div class="setup-actions">
+            <button id="btnStartGame" class="filled-btn" disabled>Start battle</button>
+            <span id="setupStatus" class="muted"></span>
+          </div>
+        </div>
+
+        <!-- Duel: battle -->
+        <div id="playGame" class="game" hidden>
+          <div class="panel-head">
+            <h1 id="gameStatus">Your move</h1>
+            <div class="controls">
+              <label class="switch"><input type="checkbox" id="playHeatmap"/><span>Sonar heatmap</span></label>
+              <button id="btnNewGame" class="tonal-btn">New battle</button>
+              <button id="btnBackHome2" class="tonal-btn">Modes</button>
+            </div>
+          </div>
+          <div class="boards">
+            <div class="board-wrap">
+              <div class="board-label">Enemy waters — fire here <span class="turn-marker" id="turnMarker"></span></div>
+              <div class="board attack" id="boardEnemy"></div>
+            </div>
+            <div class="board-wrap">
+              <div class="board-label">Your fleet</div>
+              <div class="board" id="boardMyGame"></div>
+            </div>
+            <aside class="sidebar">
+              <h2>Sonar's read on you</h2>
+              <div id="sonarInfo" class="stat-card"></div>
+              <h2>Move log</h2>
+              <ol id="moveLog" class="move-log"></ol>
+            </aside>
+          </div>
+        </div>
+
+        <!-- Solo hunt -->
+        <div id="huntGame" class="hunt" hidden>
+          <div class="panel-head">
+            <h1 id="huntTitle">Hunt</h1>
+            <div class="controls">
+              <label class="switch"><input type="checkbox" id="huntHints"/><span>Sonar hint</span></label>
+              <label class="switch"><input type="checkbox" id="huntHeat"/><span>Density map</span></label>
+              <button id="btnHuntNew" class="tonal-btn">New hunt</button>
+              <button id="btnBackHome3" class="tonal-btn">Modes</button>
+            </div>
+          </div>
+          <div class="boards">
+            <div class="board-wrap">
+              <div class="board-label" id="huntBoardLabel">Hidden fleet — fire at open water</div>
+              <div class="board attack" id="boardHunt"></div>
+            </div>
+            <aside class="sidebar">
+              <div id="huntBanner" class="banner" hidden></div>
+              <h2>Hunt status</h2>
+              <div id="huntInfo" class="stat-card"></div>
+              <h2>Sonar's suggestion</h2>
+              <div id="huntSuggest" class="stat-card muted-card">Enable “Sonar hint” to see the engine's own next shot.</div>
+              <h2>Shot log</h2>
+              <ol id="huntLog" class="move-log"></ol>
+            </aside>
+          </div>
+        </div>
+
+        <!-- Advisor (paper game) -->
+        <div id="advisorGame" class="advisor" hidden>
+          <div class="panel-head">
+            <h1>Paper advisor</h1>
+            <div class="controls">
+              <label>Advisor strength
+                <select id="teamDifficulty">
+                  <option value="256" selected>Commander (256)</option>
+                  <option value="1024">Captain (1024)</option>
+                  <option value="4096">Admiral (4096)</option>
+                </select>
+              </label>
+              <button id="btnTeamNew" class="filled-btn">New session</button>
+              <button id="btnBackHome4" class="tonal-btn">Modes</button>
+            </div>
+          </div>
+          <p class="muted wide">
+            Fire your shot in the real game, then enter what happened. Sonar tracks the
+            enemy board and suggests the next shot with its full analysis.
+          </p>
+          <div class="boards">
+            <div class="board-wrap">
+              <div class="board-label">Enemy waters (as you observed them)</div>
+              <div class="board attack" id="boardTeam"></div>
+              <div class="team-controls">
+                <button data-result="miss" class="seg-btn">Miss</button>
+                <button data-result="hit" class="seg-btn">Hit</button>
+                <button data-result="sunk" class="seg-btn">Sunk</button>
+                <label class="inline">len <input id="teamSunkLen" type="number" min="2" max="5" value="2" style="width:3.5em"/></label>
+              </div>
+            </div>
+            <aside class="sidebar">
+              <h2>Sonar suggests</h2>
+              <div class="suggest-box" id="teamSuggest">Press “New session”.</div>
+              <h2>Analysis</h2>
+              <div id="teamInfo" class="stat-card"></div>
+              <h2>Shot history</h2>
+              <ol id="teamLog" class="move-log"></ol>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ BENCHMARKS ═══════════════════════════════════════════════════ -->
+      <section id="tab-bench" class="panel" hidden>
+        <div class="panel-head">
+          <h1>Benchmarks</h1>
+          <div class="controls">
+            <button id="btnRunBench" class="filled-btn">Run live benchmarks</button>
+          </div>
+        </div>
+        <p class="muted wide">
+          The tables below are the <b>release numbers</b> — measured on the project's
+          benchmark machine and reproducible with the published commands. “Run live
+          benchmarks” re-measures the same engine <b>right here, in your browser</b>:
+          strength gates with Wilson confidence intervals, per-move latency, and
+          self-play speed. Your numbers will differ from the reference machine — that
+          is expected and honest.
+        </p>
+
+        <div id="liveBenchResults" class="bench-live"></div>
+        <div class="progress-bar" id="benchProgress" hidden><div></div></div>
+
+        <h2 class="group-title">Strength — self-play matrix <span class="tag">100 games each · 1024 hypotheses · seeded</span></h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Matchup</th><th>Win rate</th><th>Wilson 95% CI</th><th>E[shots] ± SE</th></tr></thead>
+            <tbody>
+              <tr><td>Sonar-Hybrid vs Random</td><td class="good">100.0%</td><td>[96.3, 100.0]</td><td>39.6 ± 0.6</td></tr>
+              <tr><td>Sonar-Hybrid vs PdfOnly</td><td class="good">56.0%</td><td>[46.2, 65.3]</td><td>37.0 ± 0.5</td></tr>
+              <tr><td>PdfOnly vs Random</td><td class="good">100.0%</td><td>[96.3, 100.0]</td><td>40.0 ± 0.6</td></tr>
+              <tr><td>Sonar-Hybrid vs Sonar-Hybrid</td><td>48 / 52</td><td>[38.5, 57.7]</td><td>36.1 ± 0.5</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="group-title">Strength — vs published reference bots <span class="tag">60 games each</span></h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Opponent</th><th>Sonar win rate</th><th>Avg moves / win</th></tr></thead>
+            <tbody>
+              <tr><td>HuntTarget (classic textbook)</td><td class="good">90.0%</td><td>38.4</td></tr>
+              <tr><td>BurnsPdf (Dartmouth-style PDF)</td><td>56.7%</td><td>36.7</td></tr>
+              <tr><td>MonteCarlo-256</td><td class="good">100.0%</td><td>40.1</td></tr>
+              <tr><td>MonteCarlo-512</td><td class="good">100.0%</td><td>39.2</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="group-title">Generalised boards — self-play <span class="tag">8 games / preset · seeded</span></h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Preset</th><th>Cells</th><th>Ship cells</th><th>Avg shots</th><th>Time / game</th></tr></thead>
+            <tbody>
+              <tr><td>classic 10×10</td><td>100</td><td>17</td><td>46.4</td><td>&lt; 1 ms</td></tr>
+              <tr><td>micro 7×7</td><td>49</td><td>9</td><td>21.9</td><td>&lt; 1 ms</td></tr>
+              <tr><td>big16</td><td>256</td><td>32</td><td>109.9</td><td>~5 ms</td></tr>
+              <tr><td>huge30</td><td>900</td><td>43</td><td>352.1</td><td>~225 ms</td></tr>
+              <tr><td>torus8 (wrap)</td><td>64</td><td>14</td><td>32.1</td><td>&lt; 1 ms</td></tr>
+              <tr><td>archipelago12 (holes)</td><td>144</td><td>17</td><td>58.1</td><td>~3 ms</td></tr>
+              <tr><td>poly10 (polyomino)</td><td>100</td><td>18</td><td>52.6</td><td>~2 ms</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="group-title">Methodology — why these numbers hold up</h2>
+        <ul class="method-list">
+          <li><b>Wilson score 95% intervals</b> on every win rate — correct at 0%/100% and small samples, where naive normal-approximation error bars lie.</li>
+          <li><b>Work-limited, never time-limited</b>: games run with a fixed hypothesis budget and no wall-clock deadline, so strength measures the algorithm, not the machine. Timings are reported separately and never affect results.</li>
+          <li><b>Seeded end-to-end</b>: the same seed replays the same games bit-for-bit — any third party can reproduce a number exactly (<span class="mono">sonar bench</span>, <span class="mono">verify-release</span>).</li>
+          <li><b>E[shots] with standard error</b>, not just means.</li>
+          <li><b>Handicap runs</b> (opponent gets 2× time or 2× hypotheses) demonstrate the algorithm — not compute — carries the advantage.</li>
+          <li><b>Red-team verified</b>: 2,420 hostile protocol inputs with zero panics; invariant stress across all variants (see EXPLOITABILITY.md).</li>
+        </ul>
+        <p class="muted">
+          Full raw data and reproduction commands: <b>BENCHMARKS.md</b> in the repository.
+          Live browser runs use the same engine compiled to wasm32 (simd128 backend).
+        </p>
+      </section>
+
+      <!-- ══ TESTS ════════════════════════════════════════════════════════ -->
+      <section id="tab-test" class="panel" hidden>
+        <div class="panel-head">
+          <h1>Test Sonar — live verification</h1>
+          <div class="controls">
+            <button id="btnRunTests" class="filled-btn">Run test suite</button>
+          </div>
+        </div>
+        <p class="muted wide">
+          These are the same checks the project runs in CI, executed right now against the
+          WebAssembly engine in your browser: protocol contract, determinism, full self-play
+          invariants, statistical strength gates, hostile-input robustness, generalised
+          variants, and every runnable documentation example.
+        </p>
+        <div id="testResults" class="test-results">
+          <div class="test-placeholder">Press “Run test suite”.</div>
+        </div>
+        <div class="progress-bar" id="testProgress" hidden><div></div></div>
+      </section>
+
+      <!-- ══ DOCS ════════════════════════════════════════════════════════ -->
+      <section id="tab-docs" class="panel" hidden>
+        <div class="panel-head">
+          <h1>Documentation</h1>
+          <div class="controls searchbox">
+            <input id="docSearch" type="search" placeholder="Search the docs — try “probability”, “wasm”, “torus”…" autocomplete="off"/>
+          </div>
+        </div>
+        <nav class="doc-nav" id="docNav"></nav>
+        <article class="doc-body" id="docBody"></article>
+        <div id="docSearchResults" hidden></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>Sonar <span id="footerVersion">0.5.0-beta.1</span> — pure Rust + WebAssembly · Apache-2.0</span>
+      <span class="footer-links">
+        <a href="https://github.com/wilkolbrzym-coder/SONAR" target="_blank" rel="noopener">GitHub</a>
+      </span>
+    </footer>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

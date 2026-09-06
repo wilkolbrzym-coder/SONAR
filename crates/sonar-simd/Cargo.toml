@@ -1,0 +1,29 @@
+[package]
+name = "sonar-simd"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Multi-ISA SIMD kernels for the Sonar engine: AVX2, AVX-512, NEON, wasm128 — with runtime dispatch and differential testing against the scalar reference."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAFETY CHARTER (read before editing)
+#
+# This is the ONLY crate in the Sonar workspace (besides the `sonar-wasm`
+# FFI boundary) that contains `unsafe`. The rest of Sonar is
+# `#![deny(unsafe_code)]`. Every unsafe block here:
+#   1. guards a CPU intrinsic that requires a runtime-detected or
+#      compile-time feature flag,
+#   2. operates on `&[u64]` / `&mut [u64]` slices whose lengths are
+#      validated by the safe wrapper BEFORE any intrinsic runs,
+#   3. never reads or writes beyond slice bounds (all intrinsics are
+#      element-wise: `_mm256_*` on exactly 4 lanes / `_mm512_*` on 8).
+# Correctness is enforced by the differential test suite: every backend
+# must produce bit-identical results to the scalar reference on
+# randomized inputs (see tests/differential.rs).
+# ─────────────────────────────────────────────────────────────────────────────
+
+[dependencies]

@@ -1,0 +1,36 @@
+# Sonar core — the engine library and `sonar` CLI.
+
+[package]
+name = "sonar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Sonar — the world's strongest battleship AI engine (pure Rust, Apache-2.0)"
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["battleship", "ai", "game-engine", "pdf", "bayesian"]
+categories = ["games", "algorithms"]
+
+[lib]
+name = "sonar"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sonar"
+path = "src/bin/sonar.rs"
+
+[[bench]]
+name = "core_bench"
+harness = false
+path = "benches/core_bench.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sonar-simd = { path = "../sonar-simd" }
+
+[dev-dependencies]
+criterion = "0.5"

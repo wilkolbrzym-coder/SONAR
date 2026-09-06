@@ -1,0 +1,27 @@
+# Build artifacts
+/target
+**/*.rs.bk
+
+# Web build output (engine.wasm IS committed for a deployable web/ dir,
+# rebuilt by CI — see .github/workflows/pages.yml)
+# (kept: web/engine.wasm)
+
+# Local scratch
+/.screens
+/.idea
+/.vscode
+/.DS_Store
+
+# Logs and caches
+*.log
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+node_modules/
+
+# Red-team harness artifacts (generated per run; the committed tracking
+# file is EXPLOITABILITY.md at the repo root)
+/redteam/target/
+/redteam/report.md
+/redteam/metrics.json
